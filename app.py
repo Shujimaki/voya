@@ -107,13 +107,47 @@ def before_request():
     # Prevent access to auth pages if already logged in
     if request.endpoint in ['login', 'register'] and 'user_id' in session:
         return redirect(url_for('dashboard'))
+    
+    # Set up rate limiting
+    if request.endpoint in ['login', 'register']:
+        ip = request.remote_addr
+        current_time = datetime.now()
+        if ip in g.login_attempts:
+            attempts = g.login_attempts[ip]
+            # Remove old attempts
+            attempts = [t for t in attempts if (current_time - t).seconds < 300]
+            if len(attempts) >= 5:  # Max 5 attempts per 5 minutes
+                abort(429, description="Too many attempts. Please try again later.")
+            g.login_attempts[ip] = attempts
+        else:
+            g.login_attempts[ip] = []
+
+@app.context_processor
+def inject_user():
+    """Make username available to all templates"""
+    return {'username': session.get('username', None)}
+
+# Initialize rate limiting storage
+g = app.app_ctx_globals_class()
+g.login_attempts = {}
 
 @app.after_request
 def after_request(response):
-    # Add security headers from before_request
+    # Add security headers
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    
+    # Add security headers from before_request if they exist
     if hasattr(g, 'response_headers'):
         for key, value in g.response_headers.items():
             response.headers[key] = value
+
+    # Clear sensitive data
+    if request.endpoint in ['logout']:
+        response.headers['Clear-Site-Data'] = '"cache", "cookies", "storage"'
+        
     return response
 
 def is_valid_password(password):

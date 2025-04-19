@@ -20,7 +20,7 @@
             {% if error %}
             <div class="auth-error">{{ error }}</div>
             {% endif %}
-            <form method="post" class="auth-form">
+            <form method="post" class="auth-form" id="login-form">
                 <div class="form-group">
                     <label for="username">Username</label>
                     <input type="text" id="username" name="username" required autocomplete="off">
@@ -29,7 +29,7 @@
                     <label for="password">Password</label>
                     <input type="password" id="password" name="password" required>
                 </div>
-                <button type="submit" class="auth-btn">Log In</button>
+                <button type="submit" class="auth-btn" id="submit-btn">Log In</button>
                 <div class="auth-alt">
                     Don't have an account? <a href="{{ url_for('register') }}">Register</a>
                 </div>
@@ -37,23 +37,73 @@
         </div>
     </div>
     <script>
-        // Prevent accessing login page when logged in
-        if (document.referrer.includes('/dashboard')) {
-            window.location.href = '/dashboard';
+        // Anti-spam measures
+        const form = document.getElementById('login-form');
+        const submitBtn = document.getElementById('submit-btn');
+        let isSubmitting = false;
+        let lastSubmitTime = 0;
+        const MIN_SUBMIT_INTERVAL = 2000; // 2 seconds between submissions
+
+        form.addEventListener('submit', function(e) {
+            const now = Date.now();
+            
+            // Prevent multiple simultaneous submissions
+            if (isSubmitting) {
+                e.preventDefault();
+                return;
+            }
+
+            // Prevent rapid repeated submissions
+            if (now - lastSubmitTime < MIN_SUBMIT_INTERVAL) {
+                e.preventDefault();
+                return;
+            }
+
+            // Disable form during submission
+            isSubmitting = true;
+            submitBtn.disabled = true;
+            lastSubmitTime = now;
+
+            // Re-enable form after delay
+            setTimeout(() => {
+                isSubmitting = false;
+                submitBtn.disabled = false;
+            }, MIN_SUBMIT_INTERVAL);
+        });
+
+        // Security measures
+        if (window.history && window.history.pushState) {
+            // Prevent back/forward cache
+            window.addEventListener('pageshow', function(event) {
+                if (event.persisted) {
+                    window.location.reload();
+                }
+            });
+
+            // Clear form on page load and back/forward
+            window.addEventListener('load', function() {
+                form.reset();
+            });
+
+            window.addEventListener('popstate', function() {
+                form.reset();
+                window.location.reload();
+            });
         }
-        // Prevent browser back button when logged out
-        window.addEventListener('pageshow', function(event) {
-            if (event.persisted) {
+
+        // Prevent accessing sensitive pages when logged out
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible') {
                 window.location.reload();
             }
         });
+
         // Clear any lingering session data
-        if (window.history && window.history.pushState) {
-            window.history.pushState('', null, '');
-            window.addEventListener('popstate', function() {
-                window.history.pushState('', null, '');
-                window.location.reload();
-            });
+        if (sessionStorage.length > 0) {
+            sessionStorage.clear();
+        }
+        if (localStorage.length > 0) {
+            localStorage.clear();
         }
     </script>
 </body>
