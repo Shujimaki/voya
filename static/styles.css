@@ -1331,6 +1331,17 @@ body,
 
 
 /* View Stop Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.18);
+    padding: 1rem;
+    align-items: center;
+    justify-content: center;
+}
+
 #view-stop-modal .stop-details-content {
     background: #F6F8F1;
     border-radius: 10px;
@@ -1344,7 +1355,7 @@ body,
 
 #view-stop-modal .stop-details-grid {
     display: grid;
-    grid-template-columns: 120px 1fr;
+    grid-template-columns: auto 1fr;
     gap: 0.8rem;
     margin-bottom: 1rem;
 }
@@ -1362,26 +1373,33 @@ body,
 
 #view-stop-modal .route-steps-container {
     grid-column: 1 / -1;
+    margin-top: 0.5rem;
 }
 
 #view-stop-modal .scrollable-steps {
     max-height: 200px;
     overflow-y: auto;
-    padding: 0.5rem;
-    background: rgba(255, 255, 255, 0.7);
-    border-radius: 5px;
-    margin-top: 0.5rem;
+    padding-left: 1.5rem;
+    margin: 0;
 }
 
 #view-stop-modal .scrollable-steps li {
     margin-bottom: 0.5rem;
-    padding-left: 0.5rem;
+    color: #013A63;
+    font-size: 0.95rem;
+}
+
+#view-stop-modal h3 {
+    color: #013A63;
+    font-size: 1.3rem;
+    margin: 0 0 1.2rem 0;
 }
 
 #view-stop-modal .modal-actions {
     display: flex;
     justify-content: flex-end;
-    margin-top: 1rem;
+    margin-top: 1.2rem;
+    gap: 0.8rem;
 }
 
 

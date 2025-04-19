@@ -17,30 +17,34 @@ if not os.path.exists(DB_NAME):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute('''
+        CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
+    ''')
+    c.execute('''
         CREATE TABLE trips (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             destination TEXT NOT NULL,
             arrival_date TEXT NOT NULL,
-            departure_date TEXT NOT NULL
+            departure_date TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
         )
     ''')
     c.execute('''
         CREATE TABLE stops (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             trip_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
             action TEXT NOT NULL,
             time TEXT NOT NULL,
             date TEXT NOT NULL,
             destination TEXT NOT NULL,
             route TEXT NOT NULL,
-            FOREIGN KEY(trip_id) REFERENCES trips(id)
-        )
-    ''')
-    c.execute('''
-        CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
+            FOREIGN KEY(trip_id) REFERENCES trips(id),
+            FOREIGN KEY(user_id) REFERENCES users(id)
         )
     ''')
     c.execute('''
@@ -59,7 +63,7 @@ if not os.path.exists(DB_NAME):
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
+        if 'user_id' not in session:
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
@@ -79,7 +83,7 @@ def is_valid_password(password):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if 'username' in session:
+    if 'user_id' in session:
         return redirect(url_for('dashboard'))
     
     if request.method == 'POST':
@@ -88,11 +92,12 @@ def login():
         
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
-        c.execute("SELECT password FROM users WHERE username = ?", (username,))
+        c.execute("SELECT id, password FROM users WHERE username = ?", (username,))
         user = c.fetchone()
         conn.close()
         
-        if user and bcrypt.checkpw(password.encode('utf-8'), user[0]):
+        if user and bcrypt.checkpw(password.encode('utf-8'), user[1]):
+            session['user_id'] = user[0]
             session['username'] = username
             return redirect(url_for('dashboard'))
         return render_template('login.html', error='Invalid username or password')
@@ -102,7 +107,7 @@ def login():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if 'username' in session:
+    if 'user_id' in session:
         return redirect(url_for('dashboard'))
     
     if request.method == 'POST':
@@ -135,6 +140,7 @@ def register():
             c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
                      (username, hashed))
             conn.commit()
+            session['user_id'] = c.lastrowid
             session['username'] = username
             return redirect(url_for('dashboard'))
         except Exception as e:
@@ -148,6 +154,7 @@ def register():
 
 @app.route('/logout')
 def logout():
+    session.pop('user_id', None)
     session.pop('username', None)
     return redirect(url_for('login'))
 
@@ -157,7 +164,7 @@ def logout():
 def dashboard():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT * FROM trips")
+    c.execute("SELECT * FROM trips WHERE user_id = ?", (session['user_id'],))
     trips = c.fetchall()
     conn.close()
     return render_template("dashboard.html", username=session['username'], trips=trips, trips_json=json.dumps(trips))
@@ -173,8 +180,8 @@ def add_trip():
     if destination and arrival and departure:
         conn = sqlite3.connect(DB_NAME)
         c = conn.cursor()
-        c.execute("INSERT INTO trips (destination, arrival_date, departure_date) VALUES (?, ?, ?)",
-                  (destination, arrival, departure))
+        c.execute("INSERT INTO trips (user_id, destination, arrival_date, departure_date) VALUES (?, ?, ?, ?)",
+                  (session['user_id'], destination, arrival, departure))
         conn.commit()
         conn.close()
     return redirect(url_for("dashboard"))
@@ -186,6 +193,11 @@ def delete_trip(trip_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
+        # Verify trip belongs to user
+        c.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
+        if not c.fetchone():
+            return "Trip not found", 404
+
         # First get all stop IDs for this trip
         c.execute("SELECT id FROM stops WHERE trip_id = ?", (trip_id,))
         stop_ids = [row[0] for row in c.fetchall()]
@@ -214,7 +226,8 @@ def delete_trip(trip_id):
 def itinerary(trip_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT id, destination, arrival_date, departure_date FROM trips WHERE id = ?", (trip_id,))
+    c.execute("SELECT id, destination, arrival_date, departure_date FROM trips WHERE id = ? AND user_id = ?", 
+             (trip_id, session['user_id']))
     trip = c.fetchone()
     if not trip:
         conn.close()
@@ -243,7 +256,11 @@ def itinerary(trip_id):
     window_start = max(0, min(window_start, max(0, len(days)-4)))
     days_to_show = days[window_start:window_start+4]
 
-    c.execute("SELECT id, action, time, date, destination, route FROM stops WHERE trip_id = ? ORDER BY date, time, id", (trip_id,))
+    c.execute("""SELECT id, action, time, date, destination, route 
+                 FROM stops 
+                 WHERE trip_id = ? AND user_id = ? 
+                 ORDER BY date, time, id""", 
+             (trip_id, session['user_id']))
     stops = c.fetchall()
     stops_for_day = [s for s in stops if s[3] == selected_day] if selected_day else []
     # Fetch route steps for each stop
@@ -275,7 +292,7 @@ def itinerary(trip_id):
 def get_valid_days_for_trip(trip_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT arrival_date, departure_date FROM trips WHERE id = ?", (trip_id,))
+    c.execute("SELECT arrival_date, departure_date FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
     trip = c.fetchone()
     conn.close()
     if not trip:
@@ -311,9 +328,14 @@ def add_stop_ajax(trip_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
+        # Verify trip belongs to user
+        c.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
+        if not c.fetchone():
+            return jsonify({"error": "Trip not found"}), 404
+
         # Insert main stop record
-        c.execute("INSERT INTO stops (trip_id, action, time, date, destination, route) VALUES (?, ?, ?, ?, ?, ?)",
-                (trip_id, escape(action), escape(time), selected_day, escape(destination), escape(route)))
+        c.execute("INSERT INTO stops (trip_id, user_id, action, time, date, destination, route) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (trip_id, session['user_id'], escape(action), escape(time), selected_day, escape(destination), escape(route)))
         stop_id = c.lastrowid
 
         # Insert route steps
@@ -348,6 +370,11 @@ def edit_stop(stop_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
+        # Verify stop belongs to user
+        c.execute("SELECT id FROM stops WHERE id = ? AND user_id = ?", (stop_id, session['user_id']))
+        if not c.fetchone():
+            return jsonify({"error": "Stop not found"}), 404
+
         # First delete all existing route steps for this stop
         c.execute("DELETE FROM route_steps WHERE stop_id = ?", (stop_id,))
 
@@ -377,6 +404,11 @@ def delete_stop(stop_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
+        # Verify stop belongs to user
+        c.execute("SELECT id FROM stops WHERE id = ? AND user_id = ?", (stop_id, session['user_id']))
+        if not c.fetchone():
+            return jsonify({"error": "Stop not found"}), 404
+
         # First delete the route steps (foreign key with ON DELETE CASCADE should handle this)
         c.execute("DELETE FROM route_steps WHERE stop_id = ?", (stop_id,))
         # Then delete the stop
@@ -405,8 +437,8 @@ def new_trip():
                 return render_template("itinerary.html", new_trip=True, error="Departure date cannot be before arrival date.", current_date=current_date, trip={"id": None})
             conn = sqlite3.connect(DB_NAME)
             c = conn.cursor()
-            c.execute("INSERT INTO trips (destination, arrival_date, departure_date) VALUES (?, ?, ?)",
-                      (destination, arrival, departure))
+            c.execute("INSERT INTO trips (user_id, destination, arrival_date, departure_date) VALUES (?, ?, ?, ?)",
+                      (session['user_id'], destination, arrival, departure))
             trip_id = c.lastrowid
             conn.commit()
             conn.close()
@@ -430,6 +462,10 @@ def edit_trip(trip_id):
         return jsonify({"error": "Departure date must be the same day or after arrival date."}), 400
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
+    # Verify trip belongs to user
+    c.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
+    if not c.fetchone():
+        return jsonify({"error": "Trip not found"}), 404
     c.execute("UPDATE trips SET destination=?, arrival_date=?, departure_date=? WHERE id=?",
               (destination, arrival, departure, trip_id))
     conn.commit()
@@ -445,7 +481,15 @@ def trip_stops(trip_id):
         abort(403)
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT id, action, time, date, destination, route FROM stops WHERE trip_id = ? ORDER BY date, time, id", (trip_id,))
+    # Verify trip belongs to user
+    c.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
+    if not c.fetchone():
+        return jsonify({"error": "Trip not found"}), 404
+    c.execute("""SELECT id, action, time, date, destination, route 
+                 FROM stops 
+                 WHERE trip_id = ? AND user_id = ? 
+                 ORDER BY date, time, id""", 
+             (trip_id, session['user_id']))
     stops = c.fetchall()
     stops_json = [
         {

@@ -141,8 +141,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 li.textContent = step;
                 ol.appendChild(li);
             });
-            // Show the modal
-            document.getElementById('view-stop-modal').style.display = 'flex';
+            // Show the modal with flex display for proper centering
+            const modal = document.getElementById('view-stop-modal');
+            modal.style.display = 'flex';
         }
     });
 
@@ -153,8 +154,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Close modal when clicking outside
     window.onclick = function(event) {
-        if (event.target === document.getElementById('view-stop-modal')) {
-            document.getElementById('view-stop-modal').style.display = 'none';
+        const modal = document.getElementById('view-stop-modal');
+        if (event.target === modal) {
+            modal.style.display = 'none';
         }
     };
 
