@@ -64,13 +64,19 @@ function renderTrips() {
                     }
                 };
                 card.innerHTML = `
-                    <div class="card-header">
-                        <h2 title="${trip[1]}">${trip[1]}</h2>
+                    <div class="card-content">
+                        <h2>${trip[2]}</h2>
                         <button class="delete-btn" data-trip-id="${trip[0]}" type="button">&times;</button>
-                    </div>
-                    <div class="trip-info">
-                        <p><strong>Arrival</strong><br>${trip[2]}</p>
-                        <p><strong>Departure</strong><br>${trip[3]}</p>
+                        <div class="trip-info">
+                            <div class="date-section">
+                                <p><strong>Arrival</strong></p>
+                                <p>${trip[3]}</p>
+                            </div>
+                            <div class="date-section">
+                                <p><strong>Departure</strong></p>
+                                <p>${trip[4]}</p>
+                            </div>
+                        </div>
                     </div>
                 `;
                 container.appendChild(card);

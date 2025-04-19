@@ -235,21 +235,62 @@ body,
 .trip-card {
     background-color: #F6F8F1;
     border-radius: 10px;
-    padding: 1rem;
+    padding: 1.2rem;
     width: 280px;
-    /* Fixed width */
-    min-height: 200px;
+    min-height: 220px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     position: relative;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     cursor: pointer;
     transition: box-shadow 0.2s, transform 0.2s;
     outline: none;
     font-size: 1rem;
     margin: 0 auto;
-    /* Center cards */
+    border: none;
+    text-align: center;
+}
+
+.trip-card .card-content {
+    display: flex;
+    align-content: center;
+    flex-direction: column;
+    height: 100%;
+    gap: 1rem;
+}
+
+.trip-card h2 {
+    margin: 0;
+    color: #013A63;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-align: left;
+    padding-right: 1.5rem;
+}
+
+.trip-card .trip-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.trip-card .date-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.trip-card .date-section p {
+    margin: 0;
+    color: #01497C;
+}
+
+.trip-card .date-section p strong {
+    font-size: 1.1rem;
+    font-weight: 600;
 }
 
 .trip-card:focus {
@@ -267,19 +308,6 @@ body,
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     border: 2px solid #90e0ef;
 }
-
-.trip-card h2 {
-    margin-top: 0;
-    color: #013A63;
-    font-size: 1.6rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    max-width: 180px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 
 .placeholder-card {
     background-color: #e0e0e0 !important;
@@ -304,7 +332,7 @@ body,
 }
 
 .trip-info p {
-    margin: 0.5rem 0;
+    margin: 0.25rem 0;
     font-weight: 500;
     color: #01497C;
     font-size: 1.05rem;
@@ -312,6 +340,11 @@ body,
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.trip-info p strong {
+    font-weight: 600;
+    font-size: 1.1rem;
 }
 
 .delete-btn {
