@@ -221,7 +221,7 @@ def logout():
 def dashboard():
     conn = get_db_connection()
     c = conn.cursor()
-bri    c.execute("SELECT id, user_id, destination, arrival_date, departure_date FROM trips WHERE user_id = ?", (session['user_id'],))
+    c.execute("SELECT id, user_id, destination, arrival_date, departure_date FROM trips WHERE user_id = ?", (session['user_id'],))
     trips = c.fetchall()
     trip_count = len(trips)
     conn.close()

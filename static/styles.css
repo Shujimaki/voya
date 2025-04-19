@@ -1224,6 +1224,21 @@ body,
         gap: 1rem;
     }
 
+    .card-content{
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+    .trip-card h2 {
+        font-size: 1.4rem;
+        text-align: center;
+    }
+    .trip-card .trip-info {
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+
     .trip-cards-container {
         gap: 1rem;
     }
