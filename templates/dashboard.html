@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="dashboard-bg"></div>
+<section class="dashboard">
+    <div id="notification" class="floating-notification" style="display:none;"></div>
+    <div class="welcome-section">
+        <h1>Dashboard</h1>
+        <p>Welcome Back, {{ username }}!</p>
+        <p>You have {{ trip_count }} upcoming trip(s).</p>
+    </div>
+    <div class="trip-carousel">
+        <button class="arrow-btn" id="prev-btn">&#8592;</button>
+        <div class="trip-cards-container" id="trip-cards-container">
+            <!-- Cards will be rendered by JavaScript -->
+        </div>
+        <button class="arrow-btn" id="next-btn">&#8594;</button>
+    </div>
+</section>
+<!-- prettier-ignore -->
+<script>
+  window.allTrips = {{ trips_json|safe }};
+</script>
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+{% endblock %}

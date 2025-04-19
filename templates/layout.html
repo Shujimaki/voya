@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voya</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <header>
+        <div class="navbar">
+            <div class="logo">
+                <a href="/" class="logo">
+                    <img src="{{ url_for('static', filename='logo.png') }}" alt="Voya Logo">
+                </a>
+            </div>
+            <nav class="nav-links">
+                <a href="/new">Create New Trip</a>
+                <a href="/about">About</a>
+                <a href="/contact">Contact</a>
+            </nav>
+            <div class="user-info">
+                <span>{{ username }}</span>
+                <a href="/logout">Log Out</a>
+                <img class="user-icon" src="{{ url_for('static', filename='user_icon.png') }}" alt="User Icon">
+            </div>
+        </div>
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

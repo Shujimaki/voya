@@ -1,0 +1,218 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="itinerary-outer">
+    {% if new_trip %}
+        <form class="new-trip-form styled-form" method="post">
+            <h1 class="form-title">Start a New Adventure</h1>
+            {% if error %}<div class="form-error">{{ error }}</div>{% endif %}
+            <label for="destination">Destination</label>
+            <input type="text" autocomplete="off" name="destination" id="destination" required placeholder="Where to?">
+            <div class="date-row">
+                <div>
+                    <label for="arrival">Arrival Date</label>
+                    <input type="date" name="arrival" id="arrival" required min="{{ current_date }}">
+                </div>
+                <div>
+                    <label for="departure">Departure Date</label>
+                    <input type="date" name="departure" id="departure" required min="{{ current_date }}">
+                </div>
+            </div>
+            <button type="submit" class="confirm-btn">Create Trip</button>
+        </form>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                const arrivalInput = document.getElementById('arrival');
+                const departureInput = document.getElementById('departure');
+
+                function updateDepartureMin() {
+                    if (arrivalInput.value) {
+                        // Set min departure to same day as arrival
+                        departureInput.min = arrivalInput.value;
+
+                        // If departure is before arrival, set it to arrival
+                        if (departureInput.value && departureInput.value < arrivalInput.value) {
+                            departureInput.value = arrivalInput.value;
+                        }
+                    }
+                }
+
+                arrivalInput.addEventListener('change', updateDepartureMin);
+                document.getElementById('new-trip-form').onsubmit = function(e) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const arrivalDate = new Date(arrivalInput.value);
+                    const departureDate = new Date(departureInput.value);
+
+                    if (arrivalDate < today) {
+                        alert('Arrival date cannot be in the past');
+                        e.preventDefault();
+                        return;
+                    }
+                    if (departureDate < arrivalDate) {
+                        alert('Departure date cannot be before arrival date');
+                        e.preventDefault();
+                        return;
+                    }
+                };
+            });
+        </script>
+    {% else %}
+        <div class="itinerary-main-layout">
+            <aside class="itinerary-days-nav">
+                <button class="day-nav-arrow" id="prev-day">&#8593;</button>
+                <div class="days-list" id="days-list">
+                    {% for day in days %}
+                    <button class="day-btn{% if day == current_day %} active{% endif %}" data-day="{{ day }}">Day {{ loop.index }}</button>
+                    {% endfor %}
+                </div>
+                <button class="day-nav-arrow" id="next-day">&#8595;</button>
+            </aside>
+            <section class="itinerary-details">
+                <div class="trip-header-block" id="trip-header-block">
+                    <div class="trip-details-group" id="trip-details-group">
+                        <h1 class="trip-destination" id="trip-destination">{{ trip.destination }}</h1>
+                        <div class="trip-dates" id="trip-dates">
+                            <span id="arrival-label">Arrival: {{ trip.arrival_date }}</span> |
+                            <span id="departure-label">Departure: {{ trip.departure_date }}</span>
+                        </div>
+                    </div>
+                    <button class="edit-trip-btn" id="edit-trip-btn">Edit Trip</button>
+                </div>
+                <div class="stops-section">
+                    <h2 class="stops-title">Key Stops for <span id="current-day-label">{{ current_day }}</span></h2>
+                    <div id="stops-list" class="stops-list scrollable-stops">
+                        {% for stop in stops %}
+                        <div class="stop-card" data-stop-id="{{ stop.id }}" data-stop-action="{{ stop.action }}" data-stop-time="{{ stop.time }}" data-stop-destination="{{ stop.destination }}" data-stop-route-steps='{{ stop.route_steps|tojson|safe }}'>
+                            <div class="stop-card-row">
+                                <div class="stop-action"><strong>Action:</strong> {{ stop.action }}</div>
+                                <button class="view-route-btn">View Full Details with Route</button>
+                            </div>
+                            <div class="stop-card-row stop-card-bottom">
+                                <div class="stop-time-dest"><strong>Time:</strong> {{ stop.time }}<br><strong>Destination:</strong> {{ stop.destination }}</div>
+                                <div class="stop-actions">
+                                    <button class="edit-stop-btn">Edit</button>
+                                    <button class="delete-stop-btn">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="stop-item placeholder">No stops yet. Add your first stop!</div>
+                        {% endfor %}
+                    </div>
+                    <button class="add-stop-btn" id="add-stop-btn">+ Add Key Stop</button>
+
+                    <div id="edit-stop-modal" class="modal" style="display:none;"></div>
+                </div>
+            </section>
+        </div>
+        <script src="{{ url_for('static', filename='itinerary.js') }}"
+                data-trip-id="{{ trip.id }}"
+                data-destination="{{ trip.destination }}"
+                data-arrival="{{ trip.arrival_date }}"
+                data-departure="{{ trip.departure_date }}"
+                data-days='{{ days|tojson|safe }}'
+                data-selected-day="{{ selected_day }}"
+                data-window-start="{{ window_start }}"
+        ></script>
+    {% endif %}
+</div>
+
+<!-- Add Stop Modal -->
+<div id="add-stop-modal" class="modal" style="display:none;">
+    <form id="add-stop-form" class="stop-form" method="post" action="/add_stop/{{ trip.id }}?day={{ selected_day }}">
+        <h3>Add Key Stop</h3>
+        <input type="hidden" name="date" value="{{ selected_day }}">
+        <label>Action<input autocomplete="off" autofocus type="text" name="action" required></label>
+        <label>Time<input autocomplete="off" type="time" name="time" required></label>
+        <label>Destination<input autocomplete="off" type="text" name="destination" required></label>
+        <label>Route Steps</label>
+        <ol id="route-steps-list" class="route-steps-list">
+            <li class="route-step-item">
+                <input type="text" name="route_steps[]" required placeholder="Step 1">
+                <button type="button" class="remove-step-btn" style="display:none;">&times;</button>
+            </li>
+        </ol>
+        <button type="button" id="add-route-step-btn">+ Add Step</button>
+        <div class="modal-actions">
+            <button type="submit" class="edit-trip-btn">Add</button>
+            <button type="button" id="cancel-add-stop" class="edit-trip-btn" style="background:#eee;color:#013A63;">Cancel</button>
+        </div>
+    </form>
+</div>
+
+<!-- View Stop Details Modal -->
+<div id="view-stop-modal" class="modal" style="display:none;">
+    <div class="stop-details-content">
+        <h3>Stop Details</h3>
+        <div class="stop-details-grid">
+            <div class="detail-label">Action:</div>
+            <div class="detail-value" id="view-action"></div>
+
+            <div class="detail-label">Time:</div>
+            <div class="detail-value" id="view-time"></div>
+
+            <div class="detail-label">Destination:</div>
+            <div class="detail-value" id="view-destination"></div>
+
+            <div class="detail-label">Route:</div>
+            <div class="route-steps-container">
+                <ol id="view-route-steps" class="scrollable-steps"></ol>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" id="close-view-stop" class="edit-trip-btn" style="background:#eee;color:#013A63;">Close</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add/Remove route step fields in Add Stop Modal
+    const routeStepsList = document.getElementById('route-steps-list');
+    const addRouteStepBtn = document.getElementById('add-route-step-btn');
+    addRouteStepBtn.onclick = function() {
+        const stepCount = routeStepsList.children.length + 1;
+        const li = document.createElement('li');
+        li.className = 'route-step-item';
+        li.innerHTML = `<input type="text" name="route_steps[]" required placeholder="Step ${stepCount}"><button type="button" class="remove-step-btn">&times;</button>`;
+        routeStepsList.appendChild(li);
+        updateRemoveStepBtns();
+    };
+    function updateRemoveStepBtns() {
+        const btns = routeStepsList.querySelectorAll('.remove-step-btn');
+        btns.forEach(btn => {
+            btn.style.display = (routeStepsList.children.length > 1) ? '' : 'none';
+            btn.onclick = function() {
+                btn.parentElement.remove();
+                updateRemoveStepBtns();
+            };
+        });
+    }
+    updateRemoveStepBtns();
+
+    // View Route Details Modal
+    document.querySelectorAll('.view-route-btn').forEach(btn => {
+        btn.onclick = function() {
+            const card = btn.closest('.stop-card');
+            document.getElementById('view-action').textContent = card.getAttribute('data-stop-action');
+            document.getElementById('view-time').textContent = card.getAttribute('data-stop-time');
+            document.getElementById('view-destination').textContent = card.getAttribute('data-stop-destination');
+            const steps = JSON.parse(card.getAttribute('data-stop-route-steps'));
+            const ol = document.getElementById('view-route-steps');
+            ol.innerHTML = '';
+            steps.forEach(step => {
+                const li = document.createElement('li');
+                li.textContent = step;
+                ol.appendChild(li);
+            });
+            document.getElementById('view-stop-modal').style.display = 'block';
+        };
+    });
+    document.getElementById('close-view-stop').onclick = function() {
+        document.getElementById('view-stop-modal').style.display = 'none';
+    };
+});
+</script>
