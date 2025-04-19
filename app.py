@@ -1,11 +1,15 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, abort
+from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session
 from markupsafe import escape
 import sqlite3
 import os
 import json
 from datetime import datetime, timedelta
+from functools import wraps
+import re
+import bcrypt
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # Required for session management
 
 # Create database if it doesn't exist
 DB_NAME = 'voya.db'
@@ -52,17 +56,115 @@ if not os.path.exists(DB_NAME):
     conn.close()
 
 
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def is_valid_password(password):
+    # At least 8 characters long
+    # Contains at least one uppercase and one lowercase letter
+    if len(password) < 8:
+        return False
+    if not re.search(r'[A-Z]', password):
+        return False
+    if not re.search(r'[a-z]', password):
+        return False
+    return True
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if 'username' in session:
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("SELECT password FROM users WHERE username = ?", (username,))
+        user = c.fetchone()
+        conn.close()
+        
+        if user and bcrypt.checkpw(password.encode('utf-8'), user[0]):
+            session['username'] = username
+            return redirect(url_for('dashboard'))
+        return render_template('login.html', error='Invalid username or password')
+    
+    return render_template('login.html')
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if 'username' in session:
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not username or not password or not confirm_password:
+            return render_template('register.html', error='All fields are required')
+        
+        if password != confirm_password:
+            return render_template('register.html', error='Passwords do not match')
+        
+        if not is_valid_password(password):
+            return render_template('register.html', 
+                                error='Password must be at least 8 characters long and contain uppercase and lowercase letters')
+        
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        
+        # Check if username exists
+        c.execute("SELECT * FROM users WHERE username = ?", (username,))
+        if c.fetchone():
+            conn.close()
+            return render_template('register.html', error='Username already exists')
+        
+        # Hash password and create new user
+        try:
+            hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
+                     (username, hashed))
+            conn.commit()
+            session['username'] = username
+            return redirect(url_for('dashboard'))
+        except Exception as e:
+            conn.rollback()
+            return render_template('register.html', error='Registration failed')
+        finally:
+            conn.close()
+    
+    return render_template('register.html')
+
+
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('login'))
+
+
 @app.route("/")
+@login_required
 def dashboard():
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT * FROM trips")
     trips = c.fetchall()
     conn.close()
-    return render_template("dashboard.html", trips=trips, trips_json=json.dumps(trips))
+    return render_template("dashboard.html", username=session['username'], trips=trips, trips_json=json.dumps(trips))
 
 
 @app.route("/add", methods=["POST"])
+@login_required
 def add_trip():
     destination = request.form.get("destination")
     arrival = request.form.get("arrival")
@@ -79,6 +181,7 @@ def add_trip():
 
 
 @app.route("/delete/<int:trip_id>")
+@login_required
 def delete_trip(trip_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -107,6 +210,7 @@ def delete_trip(trip_id):
 
 
 @app.route("/trip/<int:trip_id>", methods=["GET", "POST"])
+@login_required
 def itinerary(trip_id):
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
@@ -183,6 +287,7 @@ def get_valid_days_for_trip(trip_id):
 
 
 @app.route("/trip/<int:trip_id>/add_stop", methods=["POST"])
+@login_required
 def add_stop_ajax(trip_id):
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         abort(403)
@@ -226,6 +331,7 @@ def add_stop_ajax(trip_id):
 
 
 @app.route("/edit_stop/<int:stop_id>", methods=["POST"])
+@login_required
 def edit_stop(stop_id):
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         abort(403)
@@ -264,6 +370,7 @@ def edit_stop(stop_id):
 
 
 @app.route("/delete_stop/<int:stop_id>", methods=["POST"])
+@login_required
 def delete_stop(stop_id):
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         abort(403)
@@ -284,6 +391,7 @@ def delete_stop(stop_id):
 
 
 @app.route("/new", methods=["GET", "POST"])
+@login_required
 def new_trip():
     current_date = datetime.now().strftime("%Y-%m-%d")
     if request.method == "POST":
@@ -308,6 +416,7 @@ def new_trip():
 
 
 @app.route("/edit_trip/<int:trip_id>", methods=["POST"])
+@login_required
 def edit_trip(trip_id):
     data = request.get_json()
     destination = data.get("destination")
@@ -329,6 +438,7 @@ def edit_trip(trip_id):
 
 
 @app.route("/trip/<int:trip_id>/stops")
+@login_required
 def trip_stops(trip_id):
     # Only allow AJAX/JS requests
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':

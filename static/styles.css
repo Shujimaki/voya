@@ -1393,3 +1393,135 @@ input[type="text"] {
     font-size: clamp(0.9rem, 1.2vw, 1rem);
     padding: clamp(0.5rem, 0.8vw, 0.75rem);
 }
+
+/* Authentication Pages */
+.auth-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -2;
+    background: url("login_bg.jpg") center center no-repeat;
+    background-size: cover;
+    opacity: 1;
+    border-radius: 0;
+    pointer-events: none;
+}
+
+.auth-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.auth-box {
+    background: #F6F8F1;
+    border-radius: 15px;
+    padding: clamp(1.5rem, 4vw, 2.5rem);
+    width: min(420px, 95%);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    text-align: center;
+}
+
+.auth-logo {
+    display: block;
+    margin: 0 auto 1.5rem;
+}
+
+.auth-logo img {
+    height: auto;
+    width: clamp(120px, 30%, 160px);
+}
+
+.auth-box h1 {
+    color: #013A63;
+    font-size: clamp(1.8rem, 4vw, 2.2rem);
+    margin-bottom: 1.5rem;
+}
+
+.auth-error {
+    background: #ffe6e6;
+    color: #d00000;
+    padding: 0.8rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    border: 1px solid #ffcccc;
+}
+
+.auth-form {
+    text-align: left;
+}
+
+.form-group {
+    margin-bottom: 1.2rem;
+}
+
+.form-group label {
+    display: block;
+    color: #01497C;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    font-size: 1rem;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.8rem;
+    border: 2px solid #90e0ef;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+    border-color: #0077B6;
+    outline: none;
+}
+
+.password-hint {
+    display: block;
+    color: #666;
+    font-size: 0.85rem;
+    margin-top: 0.3rem;
+}
+
+.auth-btn {
+    width: 100%;
+    background: #0077B6;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.9rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    transition: background 0.2s;
+}
+
+.auth-btn:hover {
+    background: #005f99;
+}
+
+.auth-alt {
+    text-align: center;
+    margin-top: 1.2rem;
+    color: #013A63;
+    font-size: 0.95rem;
+}
+
+.auth-alt a {
+    color: #0077B6;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.auth-alt a:hover {
+    text-decoration: underline;
+}
