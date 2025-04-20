@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="about-bg"></div>
+<div class="about-container">
+    <section class="about-hero">
+        <h1>About Voya</h1>
+        <p class="tagline">Your Personal Travel Companion</p>
+    </section>
+
+    <section class="about-content">
+        <div class="about-section">
+            <h2>The Journey of Voya</h2>
+            <p>Born from a passion for exploration and organization, Voya is designed to transform how you plan and experience your travels. Whether you're an adventurous soul seeking new horizons or a methodical planner wanting to make every moment count, Voya is here to make your journey smoother.</p>
+            <p>Our platform helps you create detailed itineraries, manage your stops, and keep track of your entire journey in one place. With Voya, you can focus on making memories while we take care of the planning details.</p>
+        </div>
+
+        <div class="about-section developer-section">
+            <h2>Meet the Developer</h2>
+            <div class="developer-content">
+                <div class="developer-info">
+                    <div class="developer-header">
+                        <img src="{{ url_for('static', filename='developer.png') }}" alt="Brian Metrillo" class="developer-photo">
+                        <div class="developer-title-group">
+                            <h3>Brian Metrillo</h3>
+                            <p class="dev-title">Computer Engineering Student</p>
+                            <p class="dev-school">De La Salle University</p>
+                        </div>
+                    </div>
+                    <p class="dev-bio">As a passionate Computer Engineering student, I love exploring the intersection of technology and practical solutions. Voya represents my commitment to creating software that makes a real difference in people's lives. When I'm not coding, you'll find me learning about new technologies and working on innovative projects.</p>
+                    <div class="social-buttons">
+                        <a href="https://www.linkedin.com/in/brian-metrillo/" class="social-button linkedin" target="_blank">
+                            <span class="social-icon">in</span>
+                            <span class="social-text">Connect on LinkedIn</span>
+                        </a>
+                        <a href="https://github.com/Shujimaki" class="social-button github" target="_blank">
+                            <span class="social-icon">
+                                <svg viewBox="0 0 24 24" width="24" height="24">
+                                    <path fill="currentColor" d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12"/>
+                                </svg>
+                            </span>
+                            <span class="social-text">View on GitHub</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="about-section features-section">
+            <h2>Why Choose Voya?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>Easy Planning</h3>
+                    <p>Create and manage your travel itineraries with an intuitive interface designed for ease of use.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Organized Stops</h3>
+                    <p>Keep track of all your destinations, activities, and routes in one centralized location.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Flexible Scheduling</h3>
+                    <p>Easily adjust your plans with our dynamic scheduling system that adapts to your needs.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Detailed Routes</h3>
+                    <p>Plan your journey between stops with detailed route information and step-by-step guidance.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

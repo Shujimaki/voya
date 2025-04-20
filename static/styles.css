@@ -1714,3 +1714,333 @@ input[type="text"] {
     color: #90e0ef;
     font-size: clamp(0.8rem, 1.1vw, 0.9rem);
 }
+
+/* About Page Styles */
+.about-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -2;
+    background: url("about_bg.jpg") center center no-repeat;
+    background-size: cover;
+    opacity: 1;
+    pointer-events: none;
+}
+
+.about-container {
+    min-height: 100vh;
+    padding: clamp(2rem, 4vw, 4rem);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.about-hero {
+    text-align: center;
+    margin-bottom: clamp(2rem, 5vw, 4rem);
+    background: rgba(246, 248, 241, 0.95);
+    padding: clamp(2rem, 4vw, 3rem);
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.about-hero h1 {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    color: #013A63;
+    margin-bottom: 1rem;
+}
+
+.about-hero .tagline {
+    font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+    color: #0077B6;
+    margin: 0;
+}
+
+.about-content {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2rem, 4vw, 4rem);
+}
+
+.about-section {
+    background: rgba(246, 248, 241, 0.95);
+    padding: clamp(1.5rem, 3vw, 2.5rem);
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.about-section h2 {
+    color: #013A63;
+    font-size: clamp(1.8rem, 3vw, 2.5rem);
+    margin-bottom: 1.5rem;
+}
+
+.about-section p {
+    color: #01497C;
+    font-size: clamp(1rem, 1.5vw, 1.2rem);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+.developer-section .developer-info {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.developer-info h3 {
+    color: #0077B6;
+    font-size: clamp(1.5rem, 2.5vw, 2rem);
+    margin-bottom: 0.5rem;
+}
+
+.developer-info .dev-title {
+    color: #013A63;
+    font-size: clamp(1.1rem, 1.8vw, 1.4rem);
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.developer-info .dev-school {
+    color: #01497C;
+    font-size: clamp(1rem, 1.5vw, 1.2rem);
+    margin-bottom: 1.5rem;
+}
+
+.developer-info .dev-bio {
+    margin-bottom: 2rem;
+}
+
+.social-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+.social-button {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: clamp(0.9rem, 1.2vw, 1.1rem);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    min-width: 220px;
+}
+
+.social-button::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    transform: translate(-50%, -50%) scale(0);
+    border-radius: 50%;
+    transition: transform 0.5s ease-out;
+}
+
+.social-button:hover::before {
+    transform: translate(-50%, -50%) scale(2);
+}
+
+.social-button:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.social-button:active {
+    transform: translateY(0) scale(0.98);
+}
+
+.social-button.linkedin {
+    background: linear-gradient(135deg, #0077B5, #00568a);
+    color: white;
+}
+
+.social-button.github {
+    background: linear-gradient(135deg, #24292e, #1a1d20);
+    color: white;
+}
+
+.social-button .social-icon {
+    font-size: 1.4em;
+    min-width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+.social-button:hover .social-icon {
+    transform: rotate(-10deg) scale(1.1);
+}
+
+.social-button .social-text {
+    position: relative;
+    z-index: 1;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: clamp(1rem, 2vw, 2rem);
+    margin-top: 2rem;
+}
+
+.feature-card {
+    background: rgba(255, 255, 255, 0.9);
+    padding: clamp(1.2rem, 2vw, 2rem);
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    transform-origin: center bottom;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feature-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+}
+
+.feature-card h3 {
+    color: #0077B6;
+    font-size: clamp(1.2rem, 1.8vw, 1.5rem);
+    margin-bottom: 1rem;
+    position: relative;
+    display: inline-block;
+}
+
+.feature-card h3::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -4px;
+    width: 0;
+    height: 2px;
+    background: #0077B6;
+    transition: width 0.3s ease;
+}
+
+.feature-card:hover h3::after {
+    width: 100%;
+}
+
+.feature-card p {
+    color: #01497C;
+    font-size: clamp(0.95rem, 1.3vw, 1.1rem);
+    margin: 0;
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    .about-container {
+        padding: 1rem;
+    }
+    
+    .social-buttons {
+        justify-content: center;
+        gap: 1rem;
+    }
+    
+    .social-button {
+        width: 100%;
+        max-width: 300px;
+        justify-content: center;
+    }
+    
+    .features-grid {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .developer-info {
+        text-align: center;
+    }
+
+    .developer-info .dev-bio {
+        text-align: left;
+    }
+}
+
+@media (max-width: 480px) {
+    .about-hero {
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .about-section {
+        padding: 1.2rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .feature-card {
+        padding: 1.2rem;
+    }
+    
+    .social-button {
+        padding: 0.8rem 1rem;
+        font-size: 0.95rem;
+    }
+
+    .developer-info .dev-bio {
+        text-align: center;
+        font-size: 0.95rem;
+    }
+}
+
+/* Developer Photo and GitHub Icon Styling */
+.developer-header {
+    display: flex;
+    align-items: flex-start;
+    gap: clamp(1.5rem, 3vw, 2.5rem);
+    margin-bottom: 2rem;
+}
+
+.developer-photo {
+    width: clamp(180px, 25vw, 250px);
+    height: clamp(180px, 25vw, 250px);
+    border-radius: 15px;
+    object-fit: cover;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border: 3px solid #90e0ef;
+    background-color: #F6F8F1;
+}
+
+.developer-title-group {
+    flex: 1;
+}
+
+.social-button.github .social-icon svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .developer-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 1.5rem;
+    }
+
+    .developer-photo {
+        width: clamp(160px, 50vw, 200px);
+        height: clamp(160px, 50vw, 200px);
+    }
+
+    .developer-title-group {
+        width: 100%;
+    }
+}
