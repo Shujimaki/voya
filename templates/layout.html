@@ -30,5 +30,34 @@
     <main>
         {% block content %}{% endblock %}
     </main>
+
+    <footer class="site-footer">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h3>Navigation</h3>
+                <nav class="footer-nav">
+                    <a href="/">Home</a>
+                    <a href="/new">Create Trip</a>
+                    <a href="/about">About</a>
+                    <a href="/contact">Contact</a>
+                </nav>
+            </div>
+            <div class="footer-section">
+                <h3>About Voya</h3>
+                <p>Voya is your personal travel companion, helping you plan and organize your trips with ease. Create detailed itineraries, manage your stops, and make your journey unforgettable.</p>
+            </div>
+            <div class="footer-section">
+                <h3>Contact</h3>
+                <a href="mailto:contactbonvoya@gmail.com" class="footer-contact">contactbonvoya@gmail.com</a>
+                <div class="social-links">
+                    <a href="https://www.linkedin.com/in/brian-metrillo/" class="social-link" target="_blank">LinkedIn</a>
+                    <a href="https://github.com/Shujimaki" class="social-link" target="_blank">GitHub</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; {{ now('%Y') }} Voya by Brian Metrillo. All rights reserved.</p>
+        </div>
+    </footer>
 </body>
 </html>

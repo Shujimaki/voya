@@ -127,6 +127,12 @@ def inject_user():
     """Make username available to all templates"""
     return {'username': session.get('username', None)}
 
+@app.context_processor
+def inject_current_year():
+    """Make current year available to all templates"""
+    import datetime
+    return {'now': datetime.datetime.now().strftime}
+
 # Initialize rate limiting storage
 g = app.app_ctx_globals_class()
 g.login_attempts = {}
