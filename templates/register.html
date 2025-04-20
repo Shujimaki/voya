@@ -20,7 +20,25 @@
             {% if error %}
             <div class="auth-error">{{ error }}</div>
             {% endif %}
+            
+            {% if not token %}
+            <!-- Step 1: Email Verification -->
             <form method="post" class="auth-form" id="register-form">
+                <input type="hidden" name="verify_email" value="1">
+                <div class="form-group">
+                    <label for="email">Email Address</label>
+                    <input type="email" id="email" name="email" required autocomplete="off">
+                    <small class="email-hint">We'll send you a verification link</small>
+                </div>
+                <button type="submit" class="auth-btn" id="submit-btn">Verify Email</button>
+                <div class="auth-alt">
+                    Already have an account? <a href="{{ url_for('login') }}">Log In</a>
+                </div>
+            </form>
+            {% else %}
+            <!-- Step 2: Complete Registration -->
+            <form method="post" class="auth-form" id="register-form">
+                <input type="hidden" name="token" value="{{ token }}">
                 <div class="form-group">
                     <label for="username">Username</label>
                     <input type="text" id="username" name="username" required autocomplete="off">
@@ -34,11 +52,12 @@
                     <label for="confirm_password">Confirm Password</label>
                     <input type="password" id="confirm_password" name="confirm_password" required>
                 </div>
-                <button type="submit" class="auth-btn" id="submit-btn">Register</button>
+                <button type="submit" class="auth-btn" id="submit-btn">Complete Registration</button>
                 <div class="auth-alt">
                     Already have an account? <a href="{{ url_for('login') }}">Log In</a>
                 </div>
             </form>
+            {% endif %}
         </div>
     </div>
     <script>
@@ -64,6 +83,7 @@
                 return;
             }
 
+            {% if token %}
             // Basic password validation
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirm_password').value;
@@ -81,6 +101,7 @@
                 alert('Password must be at least 8 characters and contain uppercase and lowercase letters');
                 return;
             }
+            {% endif %}
 
             // Disable form during submission
             isSubmitting = true;
