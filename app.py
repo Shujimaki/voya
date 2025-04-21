@@ -1,89 +1,70 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session, g
-from markupsafe import escape
-import sqlite3
-import os
-import json
 from datetime import datetime, timedelta
 from functools import wraps
 import re
 import bcrypt
+from flask_mail import Mail, Message
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_session import Session
+from itsdangerous import URLSafeTimedSerializer
+from email_validator import validate_email, EmailNotValidError
+from dotenv import load_dotenv
+import logging
+import os
+import json
+
+from models import db, User, Trip, Stop, RouteStep
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Required for session management
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24).hex())  # Fallback for local dev
 
-def init_db():
-    create_db = not os.path.exists(DB_NAME)
-    conn = sqlite3.connect(DB_NAME)
-    conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key support
-    c = conn.cursor()
-    
-    if create_db:
-        # Create users table
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL UNIQUE,
-                password TEXT NOT NULL
-            )
-        ''')
-        
-        # Create trips table with foreign key to users
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS trips (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                destination TEXT NOT NULL,
-                arrival_date TEXT NOT NULL,
-                departure_date TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-        ''')
-        
-        # Create stops table with foreign keys to both trips and users
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS stops (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                trip_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                action TEXT NOT NULL,
-                time TEXT NOT NULL,
-                date TEXT NOT NULL,
-                destination TEXT NOT NULL,
-                route TEXT NOT NULL,
-                FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )
-        ''')
-        
-        # Create route_steps table with foreign key to stops
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS route_steps (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                stop_id INTEGER NOT NULL,
-                step_order INTEGER NOT NULL,
-                step_text TEXT NOT NULL,
-                FOREIGN KEY (stop_id) REFERENCES stops(id) ON DELETE CASCADE
-            )
-        ''')
-        
-        conn.commit()
-    conn.close()
+# Email configuration
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
+
+logger.debug(f"Mail username configured: {app.config['MAIL_USERNAME']}")
+if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
+    logger.error("Email credentials not found in environment variables!")
+
+mail = Mail(app)
+serializer = URLSafeTimedSerializer(app.secret_key)
 
 # Database configuration
-DB_NAME = 'voya.db'
-init_db()  # Initialize database with proper schema
+DB_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres:password@localhost/voya')
+if DB_URL.startswith('postgres://'):
+    DB_URL = DB_URL.replace('postgres://', 'postgresql://', 1)
+app.config['SQLALCHEMY_DATABASE_URI'] = DB_URL
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Ensure SQLite connections have foreign key support enabled
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+# Initialize database
+db.init_app(app)
+migrate = Migrate(app, db)
+
+# Session configuration
+app.config['SESSION_TYPE'] = 'sqlalchemy'
+app.config['SESSION_SQLALCHEMY'] = db
+Session(app)
+
+# Create tables if they don't exist
+with app.app_context():
+    db.create_all()
 
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
-            # Clear any existing session data
             session.clear()
             return redirect(url_for('login'))
         return f(*args, **kwargs)
@@ -96,177 +77,210 @@ def authenticated_user_redirect():
 
 @app.before_request
 def before_request():
-    # Add security headers to prevent caching of sensitive pages
     if request.endpoint in ['login', 'register', 'dashboard']:
         g.response_headers = {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0'
         }
-    
-    # Prevent access to auth pages if already logged in
     if request.endpoint in ['login', 'register'] and 'user_id' in session:
         return redirect(url_for('dashboard'))
-    
-    # Set up rate limiting
     if request.endpoint in ['login', 'register']:
         ip = request.remote_addr
         current_time = datetime.now()
-        if ip in g.login_attempts:
-            attempts = g.login_attempts[ip]
-            # Remove old attempts
-            attempts = [t for t in attempts if (current_time - t).seconds < 300]
-            if len(attempts) >= 5:  # Max 5 attempts per 5 minutes
-                abort(429, description="Too many attempts. Please try again later.")
-            g.login_attempts[ip] = attempts
-        else:
-            g.login_attempts[ip] = []
+        attempts = LoginAttempt.query.filter_by(ip=ip).filter(
+            LoginAttempt.timestamp > current_time - timedelta(minutes=5)
+        ).all()
+        if len(attempts) >= 5:
+            abort(429, description="Too many attempts. Please try again later.")
+        new_attempt = LoginAttempt(ip=ip, timestamp=current_time)
+        db.session.add(new_attempt)
+        db.session.commit()
+
+# Define LoginAttempt model for rate limiting
+class LoginAttempt(db.Model):
+    __tablename__ = 'login_attempts'
+    id = db.Column(db.Integer, primary_key=True)
+    ip = db.Column(db.String(45), nullable=False)
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
 @app.context_processor
 def inject_user():
-    """Make username available to all templates"""
     return {'username': session.get('username', None)}
 
 @app.context_processor
 def inject_current_year():
-    """Make current year available to all templates"""
-    import datetime
-    return {'now': datetime.datetime.now().strftime}
-
-# Initialize rate limiting storage
-g = app.app_ctx_globals_class()
-g.login_attempts = {}
+    return {'now': datetime.now().strftime}
 
 @app.after_request
 def after_request(response):
-    # Add security headers
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['X-XSS-Protection'] = '1; mode=block'
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    
-    # Add security headers from before_request if they exist
     if hasattr(g, 'response_headers'):
         for key, value in g.response_headers.items():
             response.headers[key] = value
-
-    # Clear sensitive data
     if request.endpoint in ['logout']:
         response.headers['Clear-Site-Data'] = '"cache", "cookies", "storage"'
-        
     return response
 
 def is_valid_password(password):
-    # At least 8 characters long
-    # Contains at least one uppercase and one lowercase letter
-    if len(password) < 8:
-        return False
-    if not re.search(r'[A-Z]', password):
-        return False
-    if not re.search(r'[a-z]', password):
+    if len(password) < 8 or not re.search(r'[A-Z]', password) or not re.search(r'[a-z]', password):
         return False
     return True
 
+def send_verification_email(email):
+    try:
+        token = serializer.dumps(email, salt='email-verification')
+        verification_link = url_for('verify_email', token=token, _external=True)
+        msg = Message('Verify your email address', recipients=[email])
+        msg.body = f'''Please verify your email address by clicking the following link:
+{verification_link}
+
+This link will expire in 24 hours.
+'''
+        mail.send(msg)
+        logger.debug(f"Verification email sent to {email}")
+        return token
+    except Exception as e:
+        logger.error(f"Failed to send verification email: {str(e)}")
+        raise
+
+def is_valid_email(email):
+    try:
+        validation = validate_email(email, check_deliverability=True)
+        return True, validation.normalized
+    except EmailNotValidError as e:
+        return False, str(e)
+
+@app.route('/verify-email/<token>')
+def verify_email(token):
+    try:
+        email = serializer.loads(token, salt='email-verification', max_age=86400)
+        user = User.query.filter_by(email=email, verification_token=token).first()
+        if not user:
+            logger.error("Invalid or expired token")
+            return render_template('email_verification_error.html')
+        user.email_verified = True
+        db.session.commit()
+        return redirect(url_for('register', token=token))
+    except Exception as e:
+        logger.error(f"Email verification failed: {str(e)}")
+        return render_template('email_verification_error.html')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # Redirect if already logged in
     redirect_response = authenticated_user_redirect()
     if redirect_response:
         return redirect_response
-    
     if request.method == 'POST':
-        username = request.form.get('username')
+        identifier = request.form.get('identifier')
         password = request.form.get('password')
-        
-        if not username or not password:
+        if not identifier or not password:
             return render_template('login.html', error='All fields are required')
-            
-        conn = get_db_connection()
-        c = conn.cursor()
-        # Use parameterized query to prevent SQL injection
-        c.execute("SELECT id, password FROM users WHERE username = ?", (username,))
-        user = c.fetchone()
-        conn.close()
-        
-        if user and bcrypt.checkpw(password.encode('utf-8'), user[1]):
-            session.clear()  # Clear any existing session first
-            session['user_id'] = user[0]
-            session['username'] = username
-            session.permanent = True  # Make session persistent
-            return redirect(url_for('dashboard'))
-        return render_template('login.html', error='Invalid username or password')
-    
+        user = User.query.filter((User.username == identifier) | (User.email == identifier)).first()
+        if not user:
+            return render_template('login.html', error='Invalid username or password')
+        if not user.email_verified:
+            return render_template('login.html', error='Please verify your email address first')
+        try:
+            if bcrypt.checkpw(password.encode('utf-8'), user.password):
+                session.clear()
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session.permanent = True
+                return redirect(url_for('dashboard'))
+            else:
+                return render_template('login.html', error='Invalid username or password')
+        except ValueError as e:
+            logger.error(f"Password check failed: {str(e)}")
+            return render_template('login.html', error='Invalid password format')
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    # Redirect if already logged in
     redirect_response = authenticated_user_redirect()
     if redirect_response:
         return redirect_response
-    
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
-        
-        if not username or not password or not confirm_password:
-            return render_template('register.html', error='All fields are required')
-        
-        if password != confirm_password:
-            return render_template('register.html', error='Passwords do not match')
-        
-        if not is_valid_password(password):
-            return render_template('register.html', 
-                                error='Password must be at least 8 characters long and contain uppercase and lowercase letters')
-        
-        conn = get_db_connection()
-        c = conn.cursor()
-        
-        try:
-            # Check if username exists using parameterized query
-            c.execute("SELECT id FROM users WHERE username = ?", (username,))
-            if c.fetchone():
-                return render_template('register.html', error='Username already exists')
-            
-            # Hash password and create new user
-            hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-            c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
-                     (username, hashed))
-            conn.commit()
-            
-            # Set up secure session
-            session.clear()
-            session['user_id'] = c.lastrowid
-            session['username'] = username
-            session.permanent = True
-            
-            return redirect(url_for('dashboard'))
-        except Exception as e:
-            conn.rollback()
-            return render_template('register.html', error='Registration failed')
-        finally:
-            conn.close()
-    
-    return render_template('register.html')
+        if 'verify_email' in request.form:
+            email = request.form.get('email')
+            logger.debug(f"Processing email verification for: {email}")
+            is_valid, normalized_email = is_valid_email(email)
+            if not is_valid:
+                logger.debug(f"Invalid email: {normalized_email}")
+                return render_template('register.html', error=normalized_email)
+            if User.query.filter_by(email=normalized_email).first():
+                logger.debug(f"Email already registered: {normalized_email}")
+                return render_template('register.html', error='Email already registered')
+            try:
+                token = send_verification_email(normalized_email)
+                expiry = datetime.now() + timedelta(days=1)
+                user = User(email=normalized_email, verification_token=token, token_expiry=expiry)
+                db.session.add(user)
+                db.session.commit()
+                logger.debug(f"User record created with verification token for: {normalized_email}")
+                return render_template('verify_email_sent.html', email=normalized_email)
+            except Exception as e:
+                logger.error(f"Error in email verification: {str(e)}")
+                db.session.rollback()
+                return render_template('register.html', error='Failed to send verification email')
+        else:
+            username = request.form.get('username')
+            password = request.form.get('password')
+            confirm_password = request.form.get('confirm_password')
+            token = request.form.get('token')
+            logger.debug(f"Processing registration completion for token: {token}")
+            if not username or not password or not confirm_password:
+                return render_template('register.html', token=token, error='All fields are required')
+            if password != confirm_password:
+                return render_template('register.html', token=token, error='Passwords do not match')
+            if not is_valid_password(password):
+                return render_template('register.html', token=token,
+                                       error='Password must be at least 8 characters long and contain uppercase and lowercase letters')
+            user = User.query.filter_by(verification_token=token).first()
+            if not user:
+                logger.debug("Invalid or expired verification token")
+                return render_template('register.html', error='Invalid verification token')
+            if User.query.filter_by(username=username).first():
+                return render_template('register.html', token=token, error='Username already exists')
+            try:
+                hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+                user.username = username
+                user.password = hashed
+                user.email_verified = True
+                user.verification_token = None
+                user.token_expiry = None
+                db.session.commit()
+                logger.debug(f"Registration completed for user: {username}")
+                session.clear()
+                session['user_id'] = user.id
+                session['username'] = username
+                session.permanent = True
+                return redirect(url_for('dashboard'))
+            except Exception as e:
+                logger.error(f"Error in registration completion: {str(e)}")
+                db.session.rollback()
+                return render_template('register.html', token=token, error='Registration failed')
+    token = request.args.get('token')
+    return render_template('register.html', token=token)
 
 @app.route('/logout')
 def logout():
-    # Clear the entire session
     session.clear()
     return redirect(url_for('login'))
 
 @app.route("/")
 @login_required
 def dashboard():
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT id, user_id, destination, arrival_date, departure_date FROM trips WHERE user_id = ?", (session['user_id'],))
-    trips = c.fetchall()
-    trip_count = len(trips)
-    conn.close()
-    return render_template("dashboard.html", username=session['username'], trips=trips, trips_json=json.dumps(trips), trip_count=trip_count)
-
+    trips = Trip.query.filter_by(user_id=session['user_id']).all()
+    formatted_trips = [[trip.id, trip.user_id, trip.destination, trip.arrival_date, trip.departure_date] for trip in trips]
+    return render_template("dashboard.html",
+                           username=session['username'],
+                           trips=formatted_trips,
+                           trips_json=json.dumps(formatted_trips),
+                           trip_count=len(trips))
 
 @app.route("/add", methods=["POST"])
 @login_required
@@ -274,73 +288,43 @@ def add_trip():
     destination = request.form.get("destination")
     arrival = request.form.get("arrival")
     departure = request.form.get("departure")
-
     if destination and arrival and departure:
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("INSERT INTO trips (user_id, destination, arrival_date, departure_date) VALUES (?, ?, ?, ?)",
-                  (session['user_id'], destination, arrival, departure))
-        conn.commit()
-        conn.close()
+        new_trip = Trip(destination=destination,
+                        arrival_date=arrival,
+                        departure_date=departure,
+                        user_id=session['user_id'])
+        db.session.add(new_trip)
+        db.session.commit()
     return redirect(url_for("dashboard"))
-
 
 @app.route("/delete/<int:trip_id>")
 @login_required
 def delete_trip(trip_id):
-    conn = get_db_connection()
-    c = conn.cursor()
     try:
-        # Verify trip belongs to user
-        c.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
-        if not c.fetchone():
+        trip = Trip.query.filter_by(id=trip_id, user_id=session['user_id']).first()
+        if not trip:
             return "Trip not found", 404
-
-        # First get all stop IDs for this trip
-        c.execute("SELECT id FROM stops WHERE trip_id = ?", (trip_id,))
-        stop_ids = [row[0] for row in c.fetchall()]
-
-        # Delete all route steps for these stops
-        for stop_id in stop_ids:
-            c.execute("DELETE FROM route_steps WHERE stop_id = ?", (stop_id,))
-
-        # Delete all stops for this trip
-        c.execute("DELETE FROM stops WHERE trip_id = ?", (trip_id,))
-
-        # Finally delete the trip itself
-        c.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
-
-        conn.commit()
+        db.session.delete(trip)
+        db.session.commit()
+        return redirect(url_for('dashboard'))
     except Exception as e:
-        conn.rollback()
+        db.session.rollback()
+        logger.error(f"Error deleting trip: {str(e)}")
         return "Error deleting trip", 500
-    finally:
-        conn.close()
-    return redirect(url_for("dashboard"))
-
 
 @app.route("/trip/<int:trip_id>", methods=["GET", "POST"])
 @login_required
 def itinerary(trip_id):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT id, destination, arrival_date, departure_date FROM trips WHERE id = ? AND user_id = ?", 
-             (trip_id, session['user_id']))
-    trip = c.fetchone()
+    trip = Trip.query.filter_by(id=trip_id, user_id=session['user_id']).first()
     if not trip:
-        conn.close()
         return "Trip not found", 404
-    arrival = datetime.strptime(trip[2], "%Y-%m-%d")
-    departure = datetime.strptime(trip[3], "%Y-%m-%d")
+    arrival = datetime.strptime(trip.arrival_date, "%Y-%m-%d")
+    departure = datetime.strptime(trip.departure_date, "%Y-%m-%d")
     num_days = (departure - arrival).days + 1
     days = [(arrival + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(num_days)]
-
-    # Get selected day from query param, default to first day
     selected_day = request.args.get('day')
     if selected_day not in days:
         selected_day = days[0] if days else None
-
-    # Day window logic
     try:
         window_start = int(request.args.get('window', 0))
     except ValueError:
@@ -353,32 +337,23 @@ def itinerary(trip_id):
             window_start = max(0, sel_idx - 3)
     window_start = max(0, min(window_start, max(0, len(days)-4)))
     days_to_show = days[window_start:window_start+4]
-
-    c.execute("""SELECT id, action, time, date, destination, route 
-                 FROM stops 
-                 WHERE trip_id = ? AND user_id = ? 
-                 ORDER BY date, time, id""", 
-             (trip_id, session['user_id']))
-    stops = c.fetchall()
-    stops_for_day = [s for s in stops if s[3] == selected_day] if selected_day else []
-    # Fetch route steps for each stop
+    stops_query = Stop.query.filter_by(trip_id=trip_id, user_id=session['user_id'])
+    if selected_day:
+        stops_query = stops_query.filter_by(date=selected_day)
+    stops_query = stops_query.order_by(Stop.date, Stop.time, Stop.id)
     stops_with_steps = []
-    for s in stops_for_day:
-        c.execute("SELECT step_text FROM route_steps WHERE stop_id = ? ORDER BY step_order", (s[0],))
-        steps = [row[0] for row in c.fetchall()]
+    for stop in stops_query.all():
         stops_with_steps.append({
-            "id": s[0],
-            "time": s[2],
-            "destination": s[4],
-            "action": s[1],
-            "route": s[5],
-            "route_steps": steps
+            "id": stop.id,
+            "time": stop.time,
+            "destination": stop.destination,
+            "action": stop.action,
+            "route": stop.route,
+            "route_steps": [step.step_text for step in sorted(stop.route_steps, key=lambda x: x.step_order)]
         })
-    conn.close()
     return render_template(
         "itinerary.html",
-        trip={"id": trip[0], "destination": trip[1],
-              "arrival_date": trip[2], "departure_date": trip[3]},
+        trip=trip,
         days=days,
         days_to_show=days_to_show,
         window_start=window_start,
@@ -386,20 +361,14 @@ def itinerary(trip_id):
         stops=stops_with_steps
     )
 
-
 def get_valid_days_for_trip(trip_id):
-    conn = get_db_connection()
-    c = conn.cursor()
-    c.execute("SELECT arrival_date, departure_date FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
-    trip = c.fetchone()
-    conn.close()
+    trip = Trip.query.filter_by(id=trip_id, user_id=session['user_id']).first()
     if not trip:
         return []
-    arrival = datetime.strptime(trip[0], "%Y-%m-%d")
-    departure = datetime.strptime(trip[1], "%Y-%m-%d")
+    arrival = datetime.strptime(trip.arrival_date, "%Y-%m-%d")
+    departure = datetime.strptime(trip.departure_date, "%Y-%m-%d")
     num_days = (departure - arrival).days + 1
     return [(arrival + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(num_days)]
-
 
 @app.route("/trip/<int:trip_id>/add_stop", methods=["POST"])
 @login_required
@@ -412,43 +381,39 @@ def add_stop_ajax(trip_id):
     destination = data.get("destination")
     route = data.get("route")
     selected_day = data.get("date")
-    route_steps = data.get("route_steps", [])  # Get route steps array
-
-    # Validate all fields including selected_day
+    route_steps = data.get("route_steps", [])
     if not all([action, time, destination, route, selected_day]):
         return jsonify({"error": "All fields including date are required."}), 400
-
-    # Validate selected_day is within trip's valid days
     valid_days = get_valid_days_for_trip(trip_id)
     if selected_day not in valid_days:
         return jsonify({"error": "Invalid date for this trip."}), 400
-
-    conn = get_db_connection()
-    c = conn.cursor()
+    trip = Trip.query.filter_by(id=trip_id, user_id=session['user_id']).first()
+    if not trip:
+        return jsonify({"error": "Trip not found"}), 404
     try:
-        # Verify trip belongs to user
-        c.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
-        if not c.fetchone():
-            return jsonify({"error": "Trip not found"}), 404
-
-        # Insert main stop record
-        c.execute("INSERT INTO stops (trip_id, user_id, action, time, date, destination, route) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (trip_id, session['user_id'], escape(action), escape(time), selected_day, escape(destination), escape(route)))
-        stop_id = c.lastrowid
-
-        # Insert route steps
+        new_stop = Stop(
+            trip_id=trip_id,
+            user_id=session['user_id'],
+            action=action,
+            time=time,
+            date=selected_day,
+            destination=destination,
+            route=route
+        )
+        db.session.add(new_stop)
+        db.session.flush()
         for idx, step in enumerate(route_steps):
-            c.execute("INSERT INTO route_steps (stop_id, step_order, step_text) VALUES (?, ?, ?)",
-                    (stop_id, idx, escape(step)))
-
-        conn.commit()
+            new_step = RouteStep(
+                stop_id=new_stop.id,
+                step_order=idx,
+                step_text=step
+            )
+            db.session.add(new_step)
+        db.session.commit()
+        return jsonify({"success": True})
     except Exception as e:
-        conn.rollback()
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-    return jsonify({"success": True})
-
 
 @app.route("/edit_stop/<int:stop_id>", methods=["POST"])
 @login_required
@@ -460,65 +425,46 @@ def edit_stop(stop_id):
     time = data.get("time")
     destination = data.get("destination")
     route = data.get("route")
-    route_steps = data.get("route_steps", [])  # Get array of route steps
-
+    route_steps = data.get("route_steps", [])
     if not all([action, time, destination, route]):
         return jsonify({"error": "All fields are required."}), 400
-
-    conn = get_db_connection()
-    c = conn.cursor()
+    stop = Stop.query.filter_by(id=stop_id, user_id=session['user_id']).first()
+    if not stop:
+        return jsonify({"error": "Stop not found"}), 404
     try:
-        # Verify stop belongs to user
-        c.execute("SELECT id FROM stops WHERE id = ? AND user_id = ?", (stop_id, session['user_id']))
-        if not c.fetchone():
-            return jsonify({"error": "Stop not found"}), 404
-
-        # First delete all existing route steps for this stop
-        c.execute("DELETE FROM route_steps WHERE stop_id = ?", (stop_id,))
-
-        # Update the main stop record
-        c.execute("UPDATE stops SET action=?, time=?, destination=?, route=? WHERE id=?",
-                (escape(action), escape(time), escape(destination), escape(route), stop_id))
-
-        # Insert new route steps
+        RouteStep.query.filter_by(stop_id=stop_id).delete()
+        stop.action = action
+        stop.time = time
+        stop.destination = destination
+        stop.route = route
         for idx, step in enumerate(route_steps):
-            c.execute("INSERT INTO route_steps (stop_id, step_order, step_text) VALUES (?, ?, ?)",
-                    (stop_id, idx, escape(step)))
-
-        conn.commit()
+            new_step = RouteStep(
+                stop_id=stop_id,
+                step_order=idx,
+                step_text=step
+            )
+            db.session.add(new_step)
+        db.session.commit()
+        return jsonify({"success": True})
     except Exception as e:
-        conn.rollback()
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-    return jsonify({"success": True})
-
 
 @app.route("/delete_stop/<int:stop_id>", methods=["POST"])
 @login_required
 def delete_stop(stop_id):
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         abort(403)
-    conn = get_db_connection()
-    c = conn.cursor()
+    stop = Stop.query.filter_by(id=stop_id, user_id=session['user_id']).first()
+    if not stop:
+        return jsonify({"error": "Stop not found"}), 404
     try:
-        # Verify stop belongs to user
-        c.execute("SELECT id FROM stops WHERE id = ? AND user_id = ?", (stop_id, session['user_id']))
-        if not c.fetchone():
-            return jsonify({"error": "Stop not found"}), 404
-
-        # First delete the route steps (foreign key with ON DELETE CASCADE should handle this)
-        c.execute("DELETE FROM route_steps WHERE stop_id = ?", (stop_id,))
-        # Then delete the stop
-        c.execute("DELETE FROM stops WHERE id = ?", (stop_id,))
-        conn.commit()
+        db.session.delete(stop)
+        db.session.commit()
+        return jsonify({"success": True})
     except Exception as e:
-        conn.rollback()
+        db.session.rollback()
         return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
-    return jsonify({"success": True})
-
 
 @app.route("/new", methods=["GET", "POST"])
 @login_required
@@ -533,17 +479,17 @@ def new_trip():
             departure_date = datetime.strptime(departure, "%Y-%m-%d").date()
             if departure_date < arrival_date:
                 return render_template("itinerary.html", new_trip=True, error="Departure date cannot be before arrival date.", current_date=current_date, trip={"id": None})
-            conn = get_db_connection()
-            c = conn.cursor()
-            c.execute("INSERT INTO trips (user_id, destination, arrival_date, departure_date) VALUES (?, ?, ?, ?)",
-                      (session['user_id'], destination, arrival, departure))
-            trip_id = c.lastrowid
-            conn.commit()
-            conn.close()
-            return redirect(url_for("itinerary", trip_id=trip_id))
+            new_trip = Trip(
+                user_id=session['user_id'],
+                destination=destination,
+                arrival_date=arrival,
+                departure_date=departure
+            )
+            db.session.add(new_trip)
+            db.session.commit()
+            return redirect(url_for("itinerary", trip_id=new_trip.id))
         return render_template("itinerary.html", new_trip=True, error="All fields are required.", current_date=current_date, trip={"id": None})
     return render_template("itinerary.html", new_trip=True, current_date=current_date, trip={"id": None})
-
 
 @app.route("/edit_trip/<int:trip_id>", methods=["POST"])
 @login_required
@@ -558,55 +504,49 @@ def edit_trip(trip_id):
     departure_date = datetime.strptime(departure, "%Y-%m-%d").date()
     if departure_date < arrival_date:
         return jsonify({"error": "Departure date must be the same day or after arrival date."}), 400
-    conn = get_db_connection()
-    c = conn.cursor()
-    # Verify trip belongs to user
-    c.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
-    if not c.fetchone():
+    trip = Trip.query.filter_by(id=trip_id, user_id=session['user_id']).first()
+    if not trip:
         return jsonify({"error": "Trip not found"}), 404
-    c.execute("UPDATE trips SET destination=?, arrival_date=?, departure_date=? WHERE id=?",
-              (destination, arrival, departure, trip_id))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True})
-
+    try:
+        trip.destination = destination
+        trip.arrival_date = arrival
+        trip.departure_date = departure
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/trip/<int:trip_id>/stops")
 @login_required
 def trip_stops(trip_id):
-    # Only allow AJAX/JS requests
     if not request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         abort(403)
-    conn = get_db_connection()
-    c = conn.cursor()
-    # Verify trip belongs to user
-    c.execute("SELECT id FROM trips WHERE id = ? AND user_id = ?", (trip_id, session['user_id']))
-    if not c.fetchone():
+    trip = Trip.query.filter_by(id=trip_id, user_id=session['user_id']).first()
+    if not trip:
         return jsonify({"error": "Trip not found"}), 404
-    c.execute("""SELECT id, action, time, date, destination, route 
-                 FROM stops 
-                 WHERE trip_id = ? AND user_id = ? 
-                 ORDER BY date, time, id""", 
-             (trip_id, session['user_id']))
-    stops = c.fetchall()
+    stops = Stop.query.filter_by(trip_id=trip_id, user_id=session['user_id']) \
+                     .order_by(Stop.date, Stop.time, Stop.id) \
+                     .all()
     stops_json = [
         {
-            "id": s[0],
-            "action": s[1],
-            "time": s[2],
-            "date": s[3],
-            "destination": s[4],
-            "route": s[5]
-        } for s in stops
+            "id": stop.id,
+            "action": stop.action,
+            "time": stop.time,
+            "date": stop.date,
+            "destination": stop.destination,
+            "route": stop.route
+        } for stop in stops
     ]
-    conn.close()
     return jsonify(stops_json)
-
 
 @app.route("/about")
 def about():
     return render_template("about.html")
 
+@app.route("/contact")
+def contact():
+    return render_template("contact.html")
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()

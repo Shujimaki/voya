@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const departureInput = document.getElementById('departure');
     const today = new Date().toISOString().split('T')[0];
 
-    arrivalInput.min = today;
     departureInput.min = today;
 
     function updateDepartureMin() {

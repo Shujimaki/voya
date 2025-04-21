@@ -21,28 +21,19 @@ function updateTripCount() {
     }
 }
 
-// Determine how many cards to show based on screen width
 function updateCardsToShow() {
     const screenWidth = window.innerWidth;
-
-    // Card widths (including margins) in pixels based on your CSS
-    // These values are approximations and can be adjusted as needed
-    const cardWidth = 280; // Base card width + margins
-
     if (screenWidth >= 1100) {
-        cardsToShow = 3; // Large screens: show 3 cards
+        cardsToShow = 3;
     } else if (screenWidth >= 700) {
-        cardsToShow = 2; // Medium screens: show 2 cards
+        cardsToShow = 2;
     } else {
-        cardsToShow = 1; // Small screens: show 1 card
+        cardsToShow = 1;
     }
-
-    // Re-render with the new cardsToShow value
     renderTrips();
     updateArrowState();
 }
 
-// Ensure the topmost card is fully visible for all resolutions
 function renderTrips() {
     const container = document.getElementById('trip-cards-container');
     container.innerHTML = '';
@@ -92,7 +83,7 @@ function renderTrips() {
 
 function fetchTrips() {
     if (window.allTrips) {
-        trips = window.allTrips;
+        trips = window.allTrips.sort((a, b) => new Date(a[3]) - new Date(b[3])); // Sort by arrival date
     }
 }
 
@@ -100,7 +91,6 @@ function updateArrowState() {
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
 
-    // Update arrow state
     if (trips.length <= cardsToShow) {
         prevBtn.disabled = true;
         nextBtn.disabled = true;
@@ -116,9 +106,8 @@ function updateArrowState() {
 
 document.addEventListener('DOMContentLoaded', function() {
     fetchTrips();
-    updateCardsToShow(); // Initial determination of cardsToShow
+    updateCardsToShow();
 
-    // Set up horizontal navigation
     document.getElementById('prev-btn').onclick = function() {
         if (trips.length > cardsToShow) {
             currentIndex = (currentIndex - 1 + trips.length) % trips.length;
@@ -135,7 +124,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // Handle delete button clicks
     document.getElementById('trip-cards-container').onclick = function(e) {
         if (e.target.classList.contains('delete-btn')) {
             const tripId = e.target.getAttribute('data-trip-id');
@@ -156,7 +144,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
-    // Update number of cards to show on window resize
     window.addEventListener('resize', function() {
         updateCardsToShow();
     });
