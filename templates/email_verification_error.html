@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Verification Error - Voya</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="auth-bg"></div>
+    <div class="auth-container">
+        <div class="auth-box">
+            <a href="/" class="logo auth-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Voya Logo">
+            </a>
+            <h1>Verification Failed</h1>
+            <div class="verification-message error">
+                <p>Sorry, we couldn't verify your email address.</p>
+                <p>This might be because:</p>
+                <ul>
+                    <li>The verification link has expired (valid for 24 hours)</li>
+                    <li>The verification link has already been used</li>
+                    <li>The verification link is invalid</li>
+                </ul>
+            </div>
+            <div class="auth-actions">
+                <a href="{{ url_for('register') }}" class="auth-btn">Try Again</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

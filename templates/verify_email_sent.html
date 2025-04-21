@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Verify Email - Voya</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="auth-bg"></div>
+    <div class="auth-container">
+        <div class="auth-box">
+            <a href="/" class="logo auth-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Voya Logo">
+            </a>
+            <h1>Check Your Email</h1>
+            <div class="verification-message">
+                <p>We've sent a verification link to <strong>{{ email }}</strong></p>
+                <p>Click the link in the email to verify your address and continue with registration.</p>
+                <p>The link will expire in 24 hours.</p>
+            </div>
+            <div class="auth-alt">
+                <a href="{{ url_for('register') }}">Back to Registration</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
