@@ -7,3 +7,7 @@ itsdangerous
 PyJWT
 email-validator
 python-dotenv
+psycopg2-binary
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-WTF
