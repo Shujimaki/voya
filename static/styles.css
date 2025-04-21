@@ -1642,50 +1642,6 @@ input[type="text"] {
     text-decoration: underline;
 }
 
-/* Email verification styles */
-.verification-message {
-    text-align: center;
-    margin: 1.5rem 0;
-    padding: 1rem;
-    border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-.verification-message strong {
-    color: #4a9eff;
-}
-
-.verification-message.success {
-    border-left: 4px solid #4CAF50;
-}
-
-.verification-message.error {
-    border-left: 4px solid #f44336;
-}
-
-.verification-message ul {
-    text-align: left;
-    margin: 1rem 0;
-    padding-left: 1.5rem;
-}
-
-.verification-message li {
-    margin: 0.5rem 0;
-    color: #e0e0e0;
-}
-
-.email-hint {
-    display: block;
-    margin-top: 0.25rem;
-    font-size: 0.875rem;
-    color: #a0a0a0;
-}
-
-.auth-actions {
-    margin-top: 2rem;
-    text-align: center;
-}
-
 /* Footer Styles */
 .site-footer {
     background-color: #013A63;

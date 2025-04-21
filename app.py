@@ -7,36 +7,9 @@ from datetime import datetime, timedelta
 from functools import wraps
 import re
 import bcrypt
-from flask_mail import Mail, Message
-from itsdangerous import URLSafeTimedSerializer
-from email_validator import validate_email, EmailNotValidError
-from dotenv import load_dotenv
-import logging
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
-# Load environment variables from .env file
-load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Required for session management
-
-# Email configuration
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
-
-logger.debug(f"Mail username configured: {app.config['MAIL_USERNAME']}")
-if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
-    logger.error("Email credentials not found in environment variables!")
-
-mail = Mail(app)
-serializer = URLSafeTimedSerializer(app.secret_key)
 
 def init_db():
     create_db = not os.path.exists(DB_NAME)
@@ -45,16 +18,12 @@ def init_db():
     c = conn.cursor()
     
     if create_db:
-        # Create users table with nullable username for the email verification step
+        # Create users table
         c.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE,
-                email TEXT NOT NULL UNIQUE,
-                password TEXT,
-                email_verified BOOLEAN DEFAULT 0,
-                verification_token TEXT,
-                token_expiry TIMESTAMP
+                username TEXT NOT NULL UNIQUE,
+                password TEXT NOT NULL
             )
         ''')
         
@@ -98,57 +67,6 @@ def init_db():
         ''')
         
         conn.commit()
-    else:
-        # Ensure all tables exist and have the correct schema
-        try:
-            # Check if users table needs email verification columns
-            c.execute("PRAGMA table_info(users)")
-            columns = {row[1] for row in c.fetchall()}
-            
-            if 'email_verified' not in columns:
-                c.execute("ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT 0")
-            if 'verification_token' not in columns:
-                c.execute("ALTER TABLE users ADD COLUMN verification_token TEXT")
-            if 'token_expiry' not in columns:
-                c.execute("ALTER TABLE users ADD COLUMN token_expiry TIMESTAMP")
-                
-            # Ensure other tables exist
-            c.execute('''CREATE TABLE IF NOT EXISTS trips (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                destination TEXT NOT NULL,
-                arrival_date TEXT NOT NULL,
-                departure_date TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )''')
-            
-            c.execute('''CREATE TABLE IF NOT EXISTS stops (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                trip_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                action TEXT NOT NULL,
-                time TEXT NOT NULL,
-                date TEXT NOT NULL,
-                destination TEXT NOT NULL,
-                route TEXT NOT NULL,
-                FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE,
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            )''')
-            
-            c.execute('''CREATE TABLE IF NOT EXISTS route_steps (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                stop_id INTEGER NOT NULL,
-                step_order INTEGER NOT NULL,
-                step_text TEXT NOT NULL,
-                FOREIGN KEY (stop_id) REFERENCES stops(id) ON DELETE CASCADE
-            )''')
-            
-            conn.commit()
-        except sqlite3.OperationalError as e:
-            # If anything goes wrong, log the error but don't crash
-            logger.error(f"Database migration failed: {str(e)}")
-            conn.rollback()
-            
     conn.close()
 
 # Database configuration
@@ -249,58 +167,6 @@ def is_valid_password(password):
         return False
     return True
 
-def send_verification_email(email):
-    try:
-        token = serializer.dumps(email, salt='email-verification')
-        verification_link = url_for('verify_email', token=token, _external=True)
-        
-        msg = Message('Verify your email address',
-                     recipients=[email])
-        msg.body = f'''Please verify your email address by clicking the following link:
-{verification_link}
-
-This link will expire in 24 hours.
-'''
-        mail.send(msg)
-        logger.debug(f"Verification email sent to {email}")
-        return token
-    except Exception as e:
-        logger.error(f"Failed to send verification email: {str(e)}")
-        raise
-
-def is_valid_email(email):
-    try:
-        validation = validate_email(email, check_deliverability=True)
-        return True, validation.normalized
-    except EmailNotValidError as e:
-        return False, str(e)
-
-@app.route('/verify-email/<token>')
-def verify_email(token):
-    try:
-        email = serializer.loads(token, salt='email-verification', max_age=86400)  # 24 hours
-        conn = get_db_connection()
-        c = conn.cursor()
-        
-        # First check if the token matches a user
-        c.execute("SELECT verification_token FROM users WHERE email = ? AND verification_token = ?", 
-                 (email, token))
-        user = c.fetchone()
-        if not user:
-            logger.error("Invalid or expired token")
-            return render_template('email_verification_error.html')
-
-        # Update the user's verification status but keep the token for registration completion
-        c.execute("UPDATE users SET email_verified = 1 WHERE email = ?", (email,))
-        conn.commit()
-        conn.close()
-        
-        # Pass the token to the registration completion page
-        return redirect(url_for('register', token=token))
-    except Exception as e:
-        logger.error(f"Email verification failed: {str(e)}")
-        return render_template('email_verification_error.html')
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     # Redirect if already logged in
@@ -309,31 +175,26 @@ def login():
         return redirect_response
     
     if request.method == 'POST':
-        identifier = request.form.get('identifier')  # Can be username or email
+        username = request.form.get('username')
         password = request.form.get('password')
         
-        if not identifier or not password:
+        if not username or not password:
             return render_template('login.html', error='All fields are required')
-        
+            
         conn = get_db_connection()
         c = conn.cursor()
-        
-        # Check if identifier is username or email
-        c.execute("SELECT id, username, password, email_verified FROM users WHERE username = ? OR email = ?", 
-                 (identifier, identifier))
+        # Use parameterized query to prevent SQL injection
+        c.execute("SELECT id, password FROM users WHERE username = ?", (username,))
         user = c.fetchone()
         conn.close()
         
-        if user and user[3] == 0:  # email not verified
-            return render_template('login.html', error='Please verify your email address first')
-        
-        if user and bcrypt.checkpw(password.encode('utf-8'), user[2]):
+        if user and bcrypt.checkpw(password.encode('utf-8'), user[1]):
             session.clear()  # Clear any existing session first
             session['user_id'] = user[0]
-            session['username'] = user[1]
+            session['username'] = username
             session.permanent = True  # Make session persistent
             return redirect(url_for('dashboard'))
-        return render_template('login.html', error='Invalid username/email or password')
+        return render_template('login.html', error='Invalid username or password')
     
     return render_template('login.html')
 
@@ -345,97 +206,49 @@ def register():
         return redirect_response
     
     if request.method == 'POST':
-        if 'verify_email' in request.form:
-            # Step 1: Email verification
-            email = request.form.get('email')
-            logger.debug(f"Processing email verification for: {email}")
+        username = request.form.get('username')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+        
+        if not username or not password or not confirm_password:
+            return render_template('register.html', error='All fields are required')
+        
+        if password != confirm_password:
+            return render_template('register.html', error='Passwords do not match')
+        
+        if not is_valid_password(password):
+            return render_template('register.html', 
+                                error='Password must be at least 8 characters long and contain uppercase and lowercase letters')
+        
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        try:
+            # Check if username exists using parameterized query
+            c.execute("SELECT id FROM users WHERE username = ?", (username,))
+            if c.fetchone():
+                return render_template('register.html', error='Username already exists')
             
-            is_valid, normalized_email = is_valid_email(email)
-            if not is_valid:
-                logger.debug(f"Invalid email: {normalized_email}")
-                return render_template('register.html', error=normalized_email)
+            # Hash password and create new user
+            hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
+                     (username, hashed))
+            conn.commit()
             
-            conn = get_db_connection()
-            c = conn.cursor()
-            try:
-                c.execute("SELECT id FROM users WHERE email = ?", (normalized_email,))
-                if c.fetchone():
-                    logger.debug(f"Email already registered: {normalized_email}")
-                    return render_template('register.html', error='Email already registered')
-                
-                token = send_verification_email(normalized_email)
-                expiry = datetime.now() + timedelta(days=1)
-                
-                c.execute("INSERT INTO users (email, verification_token, token_expiry) VALUES (?, ?, ?)",
-                         (normalized_email, token, expiry))
-                conn.commit()
-                logger.debug(f"User record created with verification token for: {normalized_email}")
-                
-                return render_template('verify_email_sent.html', email=normalized_email)
-            except Exception as e:
-                logger.error(f"Error in email verification: {str(e)}")
-                conn.rollback()
-                return render_template('register.html', error='Failed to send verification email')
-            finally:
-                conn.close()
-                
-        else:
-            # Step 2: Complete registration after email verification
-            username = request.form.get('username')
-            password = request.form.get('password')
-            confirm_password = request.form.get('confirm_password')
-            token = request.form.get('token')
+            # Set up secure session
+            session.clear()
+            session['user_id'] = c.lastrowid
+            session['username'] = username
+            session.permanent = True
             
-            logger.debug(f"Processing registration completion for token: {token}")
-            
-            if not username or not password or not confirm_password:
-                return render_template('register.html', token=token, error='All fields are required')
-            
-            if password != confirm_password:
-                return render_template('register.html', token=token, error='Passwords do not match')
-            
-            if not is_valid_password(password):
-                return render_template('register.html', token=token,
-                                    error='Password must be at least 8 characters long and contain uppercase and lowercase letters')
-            
-            conn = get_db_connection()
-            c = conn.cursor()
-            
-            try:
-                c.execute("SELECT id, email FROM users WHERE verification_token = ?", (token,))
-                user = c.fetchone()
-                if not user:
-                    logger.debug("Invalid or expired verification token")
-                    return render_template('register.html', error='Invalid verification token')
-                
-                c.execute("SELECT id FROM users WHERE username = ?", (username,))
-                if c.fetchone():
-                    return render_template('register.html', token=token, error='Username already exists')
-                
-                hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-                c.execute("""UPDATE users 
-                           SET username = ?, password = ?, email_verified = 1,
-                               verification_token = NULL, token_expiry = NULL
-                           WHERE id = ?""",
-                         (username, hashed, user[0]))
-                conn.commit()
-                logger.debug(f"Registration completed for user: {username}")
-                
-                session.clear()
-                session['user_id'] = user[0]
-                session['username'] = username
-                session.permanent = True
-                
-                return redirect(url_for('dashboard'))
-            except Exception as e:
-                logger.error(f"Error in registration completion: {str(e)}")
-                conn.rollback()
-                return render_template('register.html', token=token, error='Registration failed')
-            finally:
-                conn.close()
+            return redirect(url_for('dashboard'))
+        except Exception as e:
+            conn.rollback()
+            return render_template('register.html', error='Registration failed')
+        finally:
+            conn.close()
     
-    token = request.args.get('token')
-    return render_template('register.html', token=token)
+    return render_template('register.html')
 
 @app.route('/logout')
 def logout():
