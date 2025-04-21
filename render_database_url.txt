@@ -1,0 +1,1 @@
+postgresql://voya_q77i_user:42cG0WLhiYlk8mGoqm44Wu6EGV6WzWf9@dpg-d038q5muk2gs73ecl030-a.singapore-postgres.render.com/voya_q77i
