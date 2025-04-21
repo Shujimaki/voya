@@ -1,6 +1,6 @@
 # Voya
 
-Voya is a web-based travel planning app that helps you create, manage, and organize detailed itineraries. Built by Brian Metrillo, it offers an intuitive interface for planning trips, tracking destinations, and managing stops with routes. Perfect for adventurers and planners alike, Voya simplifies your travel experience.
+Voya is a web-based travel planning app that helps you create, manage, and organize detailed itineraries. It offers an intuitive interface for planning trips, tracking destinations, and managing stops with routes. Perfect for adventurers and planners alike, Voya simplifies your travel experience.
 
 ## Features
 
