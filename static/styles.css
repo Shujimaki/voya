@@ -18,6 +18,7 @@ body,
     background-size: cover !important;
     background-position: center center !important;
     background-repeat: no-repeat !important;
+    background-color: #f6f8f1; 
     min-height: 100vh;
     min-width: 100vw;
     max-width: 100vw;
@@ -162,7 +163,7 @@ main {
     width: 100vw;
     height: 100vh;
     z-index: -2;
-    background: url("dashboard_bg.jpg") center center no-repeat;
+    background: url("dashboard_bg.webp") center center no-repeat;
     background-size: cover;
     opacity: 1;
     border-radius: 0;
@@ -265,6 +266,8 @@ main {
     display: flex;
     align-content: center;
     flex-direction: column;
+    overflow: hidden;
+    text-overflow: ellipsis;
     height: 100%;
     gap: 1rem;
 }
@@ -277,6 +280,9 @@ main {
     letter-spacing: 0.5px;
     text-align: left;
     padding-right: 1.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    
 }
 
 .trip-card .trip-info {
@@ -486,7 +492,7 @@ main {
     width: 100vw;
     height: 100vh;
     z-index: -2;
-    background: url("itinerary_bg.jpg") center center no-repeat;
+    background: url("itinerary_bg.webp") center center no-repeat;
     background-size: cover;
     opacity: 1;
     border-radius: 0;
@@ -1279,10 +1285,25 @@ main {
         align-items: center;
         justify-content: center;
     }
+
+
+    .trip-card {
+        width: 200px; 
+    }
+     
     .trip-card h2 {
         font-size: 1.4rem;
         text-align: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;         
+        -webkit-box-orient: vertical;
+        max-height: 3.6em;            
+        line-height: 1.8em;
+        word-break: break-word;
     }
+
     .trip-card .trip-info {
         align-items: center;
         justify-content: center;
@@ -1520,7 +1541,7 @@ input[type="text"] {
     width: 100vw;
     height: 100vh;
     z-index: -2;
-    background: url("login_bg.jpg") center center no-repeat;
+    background: url("login_bg.webp") center center no-repeat;
     background-size: cover;
     opacity: 1;
     border-radius: 0;
@@ -1769,7 +1790,7 @@ input[type="text"] {
     width: 100vw;
     height: 100vh;
     z-index: -2;
-    background: url("about_bg.jpg") center center no-repeat;
+    background: url("about_bg.webp") center center no-repeat;
     background-size: cover;
     opacity: 1;
     pointer-events: none;
@@ -2088,3 +2109,158 @@ input[type="text"] {
         width: 100%;
     }
 }
+
+/* --- Contact Page Styles --- */
+.contact-bg {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100vw; height: 100vh;
+    z-index: -3;
+    background: url("contact_bg.webp") center center no-repeat;
+    background-size: cover;
+    opacity: 1;
+    pointer-events: none;
+}
+
+.contact-container {
+    max-width: 600px;
+    margin: 2.5rem auto;
+    padding: clamp(1.5rem, 4vw, 2.5rem);
+    background: rgba(246, 248, 241, 0.98);
+    border-radius: 14px;
+    box-shadow: 0 6px 24px rgba(0, 60, 110, 0.11);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.contact-hero {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.contact-hero h1 {
+    font-size: clamp(2rem, 5vw, 2.6rem);
+    color: #013A63;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.02em;
+    font-weight: 700;
+}
+
+.contact-hero .tagline {
+    color: #0077B6;
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.contact-content {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.contact-section {
+    width: 100%;
+    text-align: center;
+    background: none;
+    border: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.contact-section h2 {
+    font-size: 1.3rem;
+    color: #01497C;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+}
+
+.contact-section p {
+    color: #013A63;
+    font-size: 1.04rem;
+    margin-bottom: 0.3rem;
+}
+
+.email-button-container {
+    margin: 1.2rem 0;
+}
+
+.email-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8em;
+    background-color: #0077B6;
+    color: #fff;
+    font-weight: 600;
+    border: none;
+    border-radius: 7px;
+    font-size: 1.13rem;
+    padding: 0.7rem 1.3rem;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 2px 8px rgba(0,119,182,0.11);
+    transition: background-color 0.2s, transform 0.16s, box-shadow 0.21s;
+    user-select: none;
+}
+.email-button:hover, .email-button:focus {
+    background: #005f99;
+    color: #e0f0ff;
+    outline: none;
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 0 4px 16px rgba(0,119,182,0.18);
+}
+
+.email-button .email-icon {
+    font-size: 1.3rem;
+}
+
+.development-notice {
+    margin-top: 1rem;
+    background: rgba(144, 224, 239, 0.09);
+    padding: 1.2rem;
+    border-radius: 10px;
+    border: 1.5px solid #90e0ef;
+}
+
+.development-notice h2 {
+    color: #0077B6;
+    margin-bottom: 0.4em;
+}
+
+.development-notice p {
+    color: #013A63;
+    line-height: 1.45;
+    margin-bottom: 0.4em;
+}
+
+@media (max-width: 900px) {
+    .contact-container {
+        margin: 3vw auto;
+        padding: clamp(1rem, 5vw, 2.2rem);
+        max-width: 98vw;
+    }
+}
+@media (max-width: 600px) {
+    .contact-container {
+        padding: 0.9rem 0.3rem;
+        border-radius: 7px;
+        margin: 1.2rem auto;
+    }
+    .contact-hero h1 {
+        font-size: 2rem;
+    }
+    .email-button {
+        font-size: 1rem;
+        padding: 0.65rem 1.05rem;
+    }
+    .development-notice {
+        padding: 0.7rem;
+        border-radius: 6px;
+    }
+    .contact-section h2 {
+        font-size: 1.14rem;
+    }
+}
+
+/* End Contact Page Styling */
