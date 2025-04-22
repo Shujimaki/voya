@@ -88,7 +88,7 @@ def before_request():
     
     # Only apply rate limiting to form submissions
     if request.method == 'POST' and request.endpoint in ['login', 'register']:
-        ip = request.remote_addr
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0]
         current_time = datetime.now()
         
         # Different rate limits for different actions
