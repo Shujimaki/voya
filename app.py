@@ -636,5 +636,9 @@ def about():
 def contact():
     return render_template("contact.html")
 
+@app.route('/ping')
+def ping():
+    return 'OK', 200
+
 if __name__ == "__main__":
     app.run()
