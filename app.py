@@ -85,17 +85,54 @@ def before_request():
         }
     if request.endpoint in ['login', 'register'] and 'user_id' in session:
         return redirect(url_for('dashboard'))
-    if request.endpoint in ['login', 'register']:
+    
+    # Only apply rate limiting to form submissions
+    if request.method == 'POST' and request.endpoint in ['login', 'register']:
         ip = request.remote_addr
         current_time = datetime.now()
+        
+        # Different rate limits for different actions
+        time_window = 10  # minutes
+        max_attempts = 10  # attempts
+        
+        # Clean up old attempts older than 1 hour to prevent DB bloat
+        LoginAttempt.query.filter(
+            LoginAttempt.timestamp < current_time - timedelta(hours=1)
+        ).delete()
+        db.session.commit()
+        
+        # Check attempts within time window
         attempts = LoginAttempt.query.filter_by(ip=ip).filter(
-            LoginAttempt.timestamp > current_time - timedelta(minutes=5)
+            LoginAttempt.timestamp > current_time - timedelta(minutes=time_window)
         ).all()
-        if len(attempts) >= 5:
-            abort(429, description="Too many attempts. Please try again later.")
+        
+        if len(attempts) >= max_attempts:
+            abort(429, description="Too many attempts. Please try again after a few minutes.")
+        
         new_attempt = LoginAttempt(ip=ip, timestamp=current_time)
         db.session.add(new_attempt)
         db.session.commit()
+
+# command to clean up expired records
+@app.cli.command("cleanup-database")
+def cleanup_database():
+    """Clean up expired verification tokens and old login attempts."""
+    current_time = datetime.now()
+    
+    # Delete old login attempts
+    old_attempts = LoginAttempt.query.filter(
+        LoginAttempt.timestamp < current_time - timedelta(hours=24)
+    ).delete()
+    
+    # Delete unverified users with expired tokens
+    expired_users = User.query.filter(
+        User.email_verified == False,
+        User.token_expiry < current_time
+    ).delete()
+    
+    db.session.commit()
+    print(f"Cleaned up {old_attempts} old login attempts and {expired_users} expired user records.")
+
 
 # Define LoginAttempt model for rate limiting
 class LoginAttempt(db.Model):
@@ -203,6 +240,7 @@ def register():
     redirect_response = authenticated_user_redirect()
     if redirect_response:
         return redirect_response
+        
     if request.method == 'POST':
         if 'verify_email' in request.form:
             email = request.form.get('email')
@@ -211,49 +249,98 @@ def register():
             if not is_valid:
                 logger.debug(f"Invalid email: {normalized_email}")
                 return render_template('register.html', error=normalized_email)
-            if User.query.filter_by(email=normalized_email).first():
-                logger.debug(f"Email already registered: {normalized_email}")
-                return render_template('register.html', error='Email already registered')
+                
+            # Check for existing users with this email
+            existing_user = User.query.filter_by(email=normalized_email).first()
+            
+            # If user exists but isn't verified, and token is expired, delete it
+            if existing_user and not existing_user.email_verified:
+                if not existing_user.token_expiry or existing_user.token_expiry < datetime.now():
+                    db.session.delete(existing_user)
+                    db.session.commit()
+                    existing_user = None
+                    
+            # If we still have an existing user, handle appropriately
+            if existing_user:
+                if existing_user.email_verified:
+                    return render_template('register.html', error='Email already registered')
+                else:
+                    # Re-send verification for existing unverified user
+                    try:
+                        token = send_verification_email(normalized_email)
+                        existing_user.verification_token = token
+                        existing_user.token_expiry = datetime.now() + timedelta(days=1)
+                        db.session.commit()
+                        return render_template('verify_email_sent.html', email=normalized_email)
+                    except Exception as e:
+                        logger.error(f"Error in email verification: {str(e)}")
+                        return render_template('register.html', error='Failed to send verification email')
+            
+            # Create a temporary user record with just email and token
             try:
                 token = send_verification_email(normalized_email)
                 expiry = datetime.now() + timedelta(days=1)
-                user = User(email=normalized_email, verification_token=token, token_expiry=expiry)
-                db.session.add(user)
+                temp_user = User(
+                    email=normalized_email, 
+                    verification_token=token, 
+                    token_expiry=expiry,
+                    username=None,  # Will be set during final registration
+                    password=None   # Will be set during final registration
+                )
+                db.session.add(temp_user)
                 db.session.commit()
-                logger.debug(f"User record created with verification token for: {normalized_email}")
                 return render_template('verify_email_sent.html', email=normalized_email)
             except Exception as e:
                 logger.error(f"Error in email verification: {str(e)}")
                 db.session.rollback()
                 return render_template('register.html', error='Failed to send verification email')
         else:
+            # Handle final registration step
             username = request.form.get('username')
             password = request.form.get('password')
             confirm_password = request.form.get('confirm_password')
             token = request.form.get('token')
-            logger.debug(f"Processing registration completion for token: {token}")
-            if not username or not password or not confirm_password:
-                return render_template('register.html', token=token, error='All fields are required')
-            if password != confirm_password:
-                return render_template('register.html', token=token, error='Passwords do not match')
-            if not is_valid_password(password):
-                return render_template('register.html', token=token,
-                                       error='Password must be at least 8 characters long and contain uppercase and lowercase letters')
+            
+            if not token:
+                return render_template('register.html', error='Missing verification token')
+                
+            # Find the user with this token
             user = User.query.filter_by(verification_token=token).first()
             if not user:
-                logger.debug("Invalid or expired verification token")
-                return render_template('register.html', error='Invalid verification token')
+                return render_template('register.html', error='Invalid or expired verification token')
+                
+            # Token expired
+            if user.token_expiry and user.token_expiry < datetime.now():
+                db.session.delete(user)
+                db.session.commit()
+                return render_template('register.html', error='Verification token has expired. Please register again.')
+                
+            if not username or not password or not confirm_password:
+                return render_template('register.html', token=token, error='All fields are required')
+                
+            if password != confirm_password:
+                return render_template('register.html', token=token, error='Passwords do not match')
+                
+            if not is_valid_password(password):
+                return render_template('register.html', token=token,
+                                      error='Password must be at least 8 characters long and contain uppercase and lowercase letters')
+                                      
             if User.query.filter_by(username=username).first():
                 return render_template('register.html', token=token, error='Username already exists')
+                
             try:
                 hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+                
+                # Complete the user record
                 user.username = username
                 user.password = hashed
                 user.email_verified = True
                 user.verification_token = None
                 user.token_expiry = None
                 db.session.commit()
+                
                 logger.debug(f"Registration completed for user: {username}")
+                
                 session.clear()
                 session['user_id'] = user.id
                 session['username'] = username
@@ -263,6 +350,7 @@ def register():
                 logger.error(f"Error in registration completion: {str(e)}")
                 db.session.rollback()
                 return render_template('register.html', token=token, error='Registration failed')
+    
     token = request.args.get('token')
     return render_template('register.html', token=token)
 
